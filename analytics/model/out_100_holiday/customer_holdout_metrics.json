@@ -1,0 +1,271 @@
+{
+ "wape_pct_category_level": {
+  "6m_all": {
+   "pop_season": 5.21,
+   "personal_shrink": 5.21,
+   "seasonal_naive": 5.21,
+   "ml_pop": 5.24,
+   "ml_personal": 5.17
+  },
+  "12m_all": {
+   "pop_season": 4.86,
+   "personal_shrink": 4.02,
+   "seasonal_naive": 4.08,
+   "ml_pop": 4.95,
+   "ml_personal": 4.79
+  }
+ },
+ "wape_pct_household_total": {
+  "6m": {
+   "pop_season": 3.85,
+   "personal_shrink": 3.85,
+   "seasonal_naive": 3.85,
+   "ml_pop": 4.01,
+   "ml_personal": 3.96
+  },
+  "12m": {
+   "pop_season": 3.73,
+   "personal_shrink": 3.66,
+   "seasonal_naive": 3.86,
+   "ml_pop": 3.93,
+   "ml_personal": 3.86
+  }
+ },
+ "wape_pct_by_archetype_category_level": {
+  "annual_bills": {
+   "6m": {
+    "pop_season": 8.8,
+    "personal_shrink": 8.8,
+    "seasonal_naive": 8.8,
+    "ml_pop": 9.34,
+    "ml_personal": 9.3
+   },
+   "12m": {
+    "pop_season": 8.9,
+    "personal_shrink": 5.83,
+    "seasonal_naive": 4.39,
+    "ml_pop": 9.24,
+    "ml_personal": 9.06
+   }
+  },
+  "holiday_heavy": {
+   "6m": {
+    "pop_season": 5.9,
+    "personal_shrink": 5.9,
+    "seasonal_naive": 5.9,
+    "ml_pop": 6.24,
+    "ml_personal": 6.12
+   },
+   "12m": {
+    "pop_season": 5.48,
+    "personal_shrink": 4.84,
+    "seasonal_naive": 4.95,
+    "ml_pop": 5.96,
+    "ml_personal": 5.79
+   }
+  },
+  "mainstream": {
+   "6m": {
+    "pop_season": 3.64,
+    "personal_shrink": 3.64,
+    "seasonal_naive": 3.64,
+    "ml_pop": 3.81,
+    "ml_personal": 3.73
+   },
+   "12m": {
+    "pop_season": 3.57,
+    "personal_shrink": 3.57,
+    "seasonal_naive": 3.98,
+    "ml_pop": 3.73,
+    "ml_personal": 3.61
+   }
+  },
+  "no_holiday": {
+   "6m": {
+    "pop_season": 4.66,
+    "personal_shrink": 4.66,
+    "seasonal_naive": 4.66,
+    "ml_pop": 4.23,
+    "ml_personal": 4.18
+   },
+   "12m": {
+    "pop_season": 4.5,
+    "personal_shrink": 3.57,
+    "seasonal_naive": 3.67,
+    "ml_pop": 4.08,
+    "ml_personal": 3.92
+   }
+  },
+  "student": {
+   "6m": {
+    "pop_season": 6.48,
+    "personal_shrink": 6.48,
+    "seasonal_naive": 6.48,
+    "ml_pop": 5.95,
+    "ml_personal": 5.89
+   },
+   "12m": {
+    "pop_season": 5.71,
+    "personal_shrink": 3.92,
+    "seasonal_naive": 3.81,
+    "ml_pop": 5.3,
+    "ml_personal": 5.09
+   }
+  },
+  "summer_family": {
+   "6m": {
+    "pop_season": 5.17,
+    "personal_shrink": 5.17,
+    "seasonal_naive": 5.17,
+    "ml_pop": 4.98,
+    "ml_personal": 4.87
+   },
+   "12m": {
+    "pop_season": 4.13,
+    "personal_shrink": 3.61,
+    "seasonal_naive": 4.03,
+    "ml_pop": 4.3,
+    "ml_personal": 4.12
+   }
+  },
+  "winter_traveler": {
+   "6m": {
+    "pop_season": 7.08,
+    "personal_shrink": 7.08,
+    "seasonal_naive": 7.08,
+    "ml_pop": 6.94,
+    "ml_personal": 6.96
+   },
+   "12m": {
+    "pop_season": 6.15,
+    "personal_shrink": 4.23,
+    "seasonal_naive": 3.89,
+    "ml_pop": 6.2,
+    "ml_personal": 5.97
+   }
+  }
+ },
+ "wape_pct_by_archetype_household_total": {
+  "annual_bills": {
+   "6m": {
+    "pop_season": 7.17,
+    "personal_shrink": 7.17,
+    "seasonal_naive": 7.17,
+    "ml_pop": 8.01,
+    "ml_personal": 8.02
+   },
+   "12m": {
+    "pop_season": 7.11,
+    "personal_shrink": 5.28,
+    "seasonal_naive": 4.23,
+    "ml_pop": 7.81,
+    "ml_personal": 7.78
+   }
+  },
+  "holiday_heavy": {
+   "6m": {
+    "pop_season": 4.97,
+    "personal_shrink": 4.97,
+    "seasonal_naive": 4.97,
+    "ml_pop": 5.31,
+    "ml_personal": 5.24
+   },
+   "12m": {
+    "pop_season": 4.55,
+    "personal_shrink": 4.56,
+    "seasonal_naive": 4.81,
+    "ml_pop": 5.06,
+    "ml_personal": 4.96
+   }
+  },
+  "mainstream": {
+   "6m": {
+    "pop_season": 2.94,
+    "personal_shrink": 2.94,
+    "seasonal_naive": 2.94,
+    "ml_pop": 3.06,
+    "ml_personal": 3.0
+   },
+   "12m": {
+    "pop_season": 2.95,
+    "personal_shrink": 3.34,
+    "seasonal_naive": 3.76,
+    "ml_pop": 3.04,
+    "ml_personal": 2.98
+   }
+  },
+  "no_holiday": {
+   "6m": {
+    "pop_season": 3.49,
+    "personal_shrink": 3.49,
+    "seasonal_naive": 3.49,
+    "ml_pop": 3.26,
+    "ml_personal": 3.22
+   },
+   "12m": {
+    "pop_season": 3.53,
+    "personal_shrink": 3.31,
+    "seasonal_naive": 3.46,
+    "ml_pop": 3.27,
+    "ml_personal": 3.16
+   }
+  },
+  "student": {
+   "6m": {
+    "pop_season": 3.85,
+    "personal_shrink": 3.85,
+    "seasonal_naive": 3.85,
+    "ml_pop": 3.98,
+    "ml_personal": 3.9
+   },
+   "12m": {
+    "pop_season": 3.76,
+    "personal_shrink": 3.24,
+    "seasonal_naive": 3.53,
+    "ml_pop": 3.89,
+    "ml_personal": 3.75
+   }
+  },
+  "summer_family": {
+   "6m": {
+    "pop_season": 2.82,
+    "personal_shrink": 2.82,
+    "seasonal_naive": 2.82,
+    "ml_pop": 2.74,
+    "ml_personal": 2.74
+   },
+   "12m": {
+    "pop_season": 2.66,
+    "personal_shrink": 3.24,
+    "seasonal_naive": 3.79,
+    "ml_pop": 2.87,
+    "ml_personal": 2.86
+   }
+  },
+  "winter_traveler": {
+   "6m": {
+    "pop_season": 5.02,
+    "personal_shrink": 5.02,
+    "seasonal_naive": 5.02,
+    "ml_pop": 5.18,
+    "ml_personal": 5.07
+   },
+   "12m": {
+    "pop_season": 4.38,
+    "personal_shrink": 3.63,
+    "seasonal_naive": 3.6,
+    "ml_pop": 4.68,
+    "ml_personal": 4.52
+   }
+  }
+ },
+ "shrinkage_k_by_fold": {
+  "0": 0.5,
+  "1": 0.5,
+  "2": 0.5,
+  "3": 0.5,
+  "4": 0.5
+ },
+ "test_customers_per_fold": 20,
+ "folds": 5
+}
