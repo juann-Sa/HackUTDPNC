@@ -16,6 +16,23 @@ export interface DangerRow { date: string; p_below: number; reasons: string }
 export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
 export interface TimelineRow { day_offset: number; date: string; actual_net_cash_cents: number | null; actual_liquid_cents: number | null; continue_low_cents: number | null; continue_mid_cents: number | null; continue_high_cents: number | null; coach_low_cents: number | null; coach_mid_cents: number | null; coach_high_cents: number | null }
 export interface WhatifRow { day_offset: number; date: string; low_cents: number; mid_cents: number; high_cents: number; label: string }
+export interface CoachScenario {
+  incomeMult: number;
+  categoryMult: Partial<Record<"housing" | "utilities" | "groceries" | "other_spending" | "dining" | "transport" | "shopping", number>>;
+  oneOffCents: number;
+  oneOffInDays: number;
+  moveToDebtCents: number;
+  jobLossMonths: number;
+  cardAprBumpPct?: number;
+  purchase?: { kind: "car" | "home" | "other"; priceCents: number; downCents: number; aprPct: number; termMonths: number; inDays: number };
+  summary: string;
+}
+export interface ScenarioForecastPoint { day_offset: number; date: string; low_cents: number; mid_cents: number; high_cents: number; label: string }
+export interface PersistedFutureScenario {
+  scenario_type: "coach" | "user";
+  scenario: CoachScenario;
+  forecast: ScenarioForecastPoint[];
+}
 export interface CoachActionRow { kind: string; amount_cents: number; fraction: number; annual_saving_cents: number; p_low_before: number; p_low_after: number; detail: string; driver: string; es_before_cents: number; es_after_cents: number }
 export interface ForecastRunRow { scenario: string; label: string; p_low: number; threshold_cents: number; end_liquid_p5_cents: number; end_liquid_p50_cents: number; end_liquid_p95_cents: number; horizon_days: number }
 export interface GoalRow { goal_id: string; name: string; kind: string; target_cents: number; target_date: string }
@@ -37,6 +54,7 @@ export interface CustomerData {
   qa?: QaRow[];
   timeline_360?: TimelineRow[];
   timeline_whatif?: WhatifRow[];
+  future_scenario?: PersistedFutureScenario[];
   coach_action?: CoachActionRow[];
   forecast_run?: ForecastRunRow[];
   goal?: GoalRow[];

@@ -1,4 +1,5 @@
 import { CUSTOMER_ID, callProcedure, select } from "@/lib/spacetime-server";
+import type { ScenarioForecastPoint } from "@/lib/live-data";
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +15,24 @@ export async function POST(req: Request) {
     const rows = await select(`SELECT * FROM qa WHERE customer_id = '${customer_id}'`);
     const latest = rows.sort((a, b) => Number(b.qa_id) - Number(a.qa_id))[0];
     const fromProcedure = typeof result === "string" ? result : undefined;
-    if (latest && String(latest.question) === q)
-      return Response.json({ answer: latest.answer, verdict: latest.verdict, interpretation: latest.interpretation, supported: latest.supported, source: latest.source });
+    if (latest && String(latest.question) === q) {
+      const savedScenario = latest.scenario_json
+        ? (await select(`SELECT scenario_json, forecast_json FROM future_scenario WHERE scenario_id = '${customer_id}|coach'`))[0]
+        : undefined;
+      const forecast: ScenarioForecastPoint[] = savedScenario
+        ? JSON.parse(String(savedScenario.forecast_json)) as ScenarioForecastPoint[]
+        : [];
+      forecast.sort((a, b) => Number(a.day_offset) - Number(b.day_offset));
+      return Response.json({
+        answer: latest.answer,
+        verdict: latest.verdict,
+        interpretation: latest.interpretation,
+        supported: latest.supported,
+        source: latest.source,
+        scenario: savedScenario ? JSON.parse(String(savedScenario.scenario_json)) : null,
+        forecast,
+      });
+    }
     return Response.json({ answer: fromProcedure ?? "No answer came back.", verdict: "", interpretation: "", supported: false, source: "template" });
   } catch (e) {
     return Response.json({ error: (e as Error).message }, { status: 502 });

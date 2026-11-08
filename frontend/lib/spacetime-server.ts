@@ -59,6 +59,8 @@ export async function select(query: string): Promise<Row[]> {
 
 /** Reducers the dashboard may call, with argument order (the HTTP API takes positional args). */
 export const REDUCERS: Record<string, string[]> = {
+  run_what_if: ["customer_id", "include_external", "income_mult", "category_mults", "one_off_cents", "one_off_day", "move_to_debt_cents", "job_loss_months", "card_apr_bump_pct", "purchase_kind", "purchase_price_cents", "down_payment_cents", "loan_apr_pct", "loan_term_months", "purchase_in_days"],
+  clear_user_future_scenario: ["customer_id"],
   add_external_account: ["customer_id", "institution", "account_type", "nickname", "balance_cents", "apr_pct", "annual_yield_pct", "monthly_payment_cents"],
   remove_external_account: ["account_id"],
   run_forecast: ["customer_id", "include_external"],
