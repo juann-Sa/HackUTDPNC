@@ -168,3 +168,6 @@ a:hover {
 .pnc-dash .action-card p { margin: 6px 0 0; }
 .pnc-dash .goal-line, .pnc-dash .goal-tip { margin: 8px 0 0; }
 .pnc-dash .goal-note { margin: 8px 25px 0; }
+.pnc-dash .page-heading + .coach-panel { margin-top: 0; }
+.pnc-dash .coach-data-note { margin: 12px 25px 0; }
+.pnc-dash .coach-disclaimer { margin: 8px 0 0; }

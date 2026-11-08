@@ -49,7 +49,7 @@ export default function CoachPanel() {
     .slice(0, 4);
 
   return <section className="panel coach-panel" aria-labelledby="coach-title">
-    <div className="panel-heading"><div><h2 id="coach-title"><Sparkles size={18} aria-hidden /> Ask the coach</h2><p className="coach-sub">Ask about {customerId}&apos;s money: where it stands, or a what-if (a purchase or loan, a pay change, a job loss). It runs the numbers first, then explains them.</p></div></div>
+    <div className="panel-heading"><div><h2 id="coach-title"><Sparkles size={18} aria-hidden /> Ask the coach</h2></div></div>
     <form className="coach-form" onSubmit={submit}>
       <label htmlFor="coach-question" className="sr-only">Your question</label>
       <input id="coach-question" value={question} maxLength={300} placeholder="e.g. Can I afford a $1,500 laptop in December?" onChange={event => setQuestion(event.target.value)} disabled={busy} />

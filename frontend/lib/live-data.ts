@@ -78,6 +78,26 @@ export function banksFor(d: CustomerData): ConnectedBank[] {
   return [pnc, ...outside.values()];
 }
 
+// ---------- estimated credit score ----------
+/** A transparent estimate, not a bureau score: built only from what this data shows. Starts at 700, then
+ *  card utilization (the biggest factor customers control): <10% +60, <30% +30, <50% 0, <75% −40, else −80;
+ *  a card payment in every month of history +40 (each month without one −25); both a card and an installment
+ *  loan (credit mix) +10. Clamped to 300–850; bands follow the common FICO ranges. */
+export function estimateCreditScore(d: CustomerData): { score: number; band: string; missedMonths: number; months: number } | null {
+  const util = d.book_snapshot[0]?.utilization;
+  if (util == null) return null;
+  const months = [...new Set(d.ledger_entry.map(e => e.posted_date.slice(0, 7)))];
+  const paid = new Set(d.ledger_entry.filter(e => e.account_type === 'credit_card' && e.category === 'debt_payment').map(e => e.posted_date.slice(0, 7)));
+  const missed = months.filter(m => !paid.has(m)).length;
+  let s = 700;
+  s += util < 0.1 ? 60 : util < 0.3 ? 30 : util < 0.5 ? 0 : util < 0.75 ? -40 : -80;
+  s += missed === 0 ? 40 : -25 * missed;
+  if (d.account.some(a => a.account_type === 'credit_card') && d.account.some(a => LOANS.includes(a.account_type))) s += 10;
+  const score = Math.max(300, Math.min(850, Math.round(s)));
+  const band = score >= 800 ? 'Exceptional' : score >= 740 ? 'Very good' : score >= 670 ? 'Good' : score >= 580 ? 'Fair' : 'Poor';
+  return { score, band, missedMonths: missed, months: months.length };
+}
+
 // ---------- account tabs ----------
 function closingBefore(d: CustomerData, accountIds: string[], monthsBack: number): number | undefined {
   const months = [...new Set(d.statement.map(s => s.month))].sort();
@@ -109,6 +129,7 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
   const cardBal = sum(card);
   const limit = d.customer[0]?.credit_limit_cents ?? 0;
   const cardPay = card[0] && payoff.get(card[0].account_id);
+  const credit = estimateCreditScore(d);
 
   const ira = of("ira");
   const year = asOf.slice(0, 4);
@@ -137,12 +158,17 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
     },
     credit: {
       name: "Credit",
-      primary: { label: "Card balance", value: money(cardBal) },
-      change: cardPay ? (cardPay.payoff_month ? `Paid off ${monthLabel(cardPay.payoff_month)} at today's payments` : "Not shrinking at today's payments") : undefined,
+      primary: credit
+        ? { label: "Estimated credit score", value: `${credit.score} · ${credit.band}` }
+        : { label: "Estimated credit score", value: "—" },
+      change: credit
+        ? `Estimate from card use and ${credit.missedMonths === 0 ? `${credit.months} months of on-time card payments` : `${credit.missedMonths} months without a card payment`}, not a bureau score`
+        : undefined,
       metrics: [
+        { label: "Card balance", value: money(cardBal) },
         { label: "Available credit", value: money(Math.max(0, limit - cardBal)) },
         { label: "APR", value: `${(card[0]?.apr_pct ?? 0).toFixed(1)}%` },
-        ...(cardPay ? [{ label: "Paid off with the plan", value: payoffLabel(cardPay.coach_payoff_months, cardPay.coach_payoff_month) }] : []),
+        ...(cardPay ? [{ label: "Card paid off", value: cardPay.payoff_month ? monthLabel(cardPay.payoff_month) : `Not at this pace (plan: ${payoffLabel(cardPay.coach_payoff_months, cardPay.coach_payoff_month)})` }] : []),
       ],
       progress: snap?.utilization != null ? { label: "Credit utilization", value: Math.round(100 * snap.utilization), detail: `${pct(snap.utilization, 0)} of credit limit used` } : undefined,
     },
