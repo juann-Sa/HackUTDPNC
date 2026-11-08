@@ -25,3 +25,7 @@
 .pnc-dash .payments-panel .month-nav .icon-button{transition:background-color 160ms,color 160ms,box-shadow 160ms}
 .pnc-dash .payments-panel .month-nav .icon-button:hover{background:#fff0e5;color:#ae4d08;box-shadow:0 1px 4px rgba(23,23,23,.08)}
 .pnc-dash .payments-panel .month-nav .icon-button:active{background:#ffe1ca}
+
+.pnc-dash .account-wrap{display:flex;align-items:center;gap:6px}
+.pnc-dash .account-options-button{display:grid;place-items:center;background:#fff;border:0;border-radius:6px;padding:5px;cursor:pointer}
+.pnc-dash .account-options-button:hover{background:#fff0e5;color:#ae4d08}

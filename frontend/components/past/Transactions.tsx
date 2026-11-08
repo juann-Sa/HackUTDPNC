@@ -1,0 +1,6 @@
+﻿import type { LedgerRow } from "@/lib/live-data";
+import { money } from "./history-data";
+type MovementRow = LedgerRow & { balance_change_cents?: number };
+export default function Transactions({ rows }: { rows: LedgerRow[] }) {
+ return <ul className="history-transactions">{rows.map((row,index) => { const movement = (row as MovementRow).balance_change_cents; return <li key={`${row.posted_date}-${row.account_id}-${index}`}><div><strong>{row.description || row.transaction_type.replace(/_/g," ")}</strong><small>{new Date(`${row.posted_date}T12:00:00`).toLocaleDateString("en-US",{ month:"short",day:"numeric" })} · {row.account_type.replace(/_/g," ")}{row.flow_class === "internal_transfer" ? " · Internal transfer" : row.flow_class === "external_transfer" ? " · External transfer" : ""}</small></div><div><strong className={row.flow_class === "income" ? "history-income" : ""}>{row.flow_class === "income" ? "+" : row.flow_class === "expense" ? "−" : ""}{money(row.amount_cents)}</strong>{movement !== undefined && <small>Account change {movement >= 0 ? "+" : "−"}{money(Math.abs(movement))}</small>}</div></li>; })}{rows.length === 0 && <li className="history-empty">No recorded transactions.</li>}</ul>;
+}

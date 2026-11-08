@@ -131,17 +131,39 @@ function Slider({
   display: string;
   onChange: (value: number) => void;
 }) {
+<<<<<<< HEAD
+=======
+  const centered = min < 0 && max > 0;
+  const position = centered ? (value < 0 ? value / -min * 100 : value / max * 100) : value;
+  function change(position: number) {
+    const actual = centered ? (position < 0 ? position / 100 * -min : position / 100 * max) : position;
+    onChange(Math.max(min, Math.min(max, Math.round(actual / step) * step)));
+  }
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
   return (
     <label className="future-slider">
       <span className="future-slider-label">{label}<output>{display}</output></span>
       <input
         type="range"
+<<<<<<< HEAD
         min={min}
         max={max}
         step={step}
         value={value}
         aria-label={label}
         onChange={(event: ChangeEvent<HTMLInputElement>) => onChange(Number(event.target.value))}
+=======
+        min={centered ? -100 : min}
+        max={centered ? 100 : max}
+        step={centered ? "any" : step}
+        value={position}
+        aria-label={label}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuenow={value}
+        aria-valuetext={display}
+        onChange={(event: ChangeEvent<HTMLInputElement>) => change(Number(event.target.value))}
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
       />
     </label>
   );
@@ -245,9 +267,12 @@ function ScenarioControlPanel({
       <div className="panel-heading">
         <div>
           <h2 id="future-controls-title">What if?</h2>
+<<<<<<< HEAD
           <p className="future-panel-subtitle">
             Adjust your assumptions. The forecast updates when you apply your sliders.
           </p>
+=======
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
         </div>
       </div>
 
@@ -349,7 +374,10 @@ function ScenarioControlPanel({
         {saving ? "Updating forecast…" : "Apply my slider changes"}
       </button>
       {error && <p className="future-control-error" role="alert">{error}</p>}
+<<<<<<< HEAD
       <p className="future-control-note">Scenarios are estimates for exploration and don&apos;t change your accounts.</p>
+=======
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
     </section>
   );
 }
@@ -546,7 +574,11 @@ function FutureDashboardContent() {
             <section className="future-panel" aria-labelledby="future-forecast-title">
               <div className="panel-heading">
                 <div>
+<<<<<<< HEAD
                   <h2 id="future-forecast-title">180-day outlook</h2>
+=======
+                  <h2 id="future-forecast-title">180-day Outlook</h2>
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
                 </div>
               </div>
               <div className="future-legend" aria-label="Forecast lines">

@@ -1,0 +1,24 @@
+﻿.pnc-dash .financial-position-panel{display:flex;flex-direction:column;align-self:start;min-width:0}
+.pnc-dash .financial-position-panel .panel-heading{padding:22px 25px 0}
+.pnc-dash .financial-position-panel h2{font-size:20px;font-weight:500;letter-spacing:-.55px}
+.pnc-dash .position-body{display:grid;grid-template-columns:minmax(150px,190px) minmax(0,1fr);align-items:center;justify-content:center;gap:24px;padding:16px 25px 12px}
+.pnc-dash .position-ring-wrap{position:relative;min-width:0;display:grid;place-items:center}
+.pnc-dash .position-ring{display:block;width:100%;max-width:190px;overflow:visible}
+.pnc-dash .position-arc{cursor:pointer;transition:stroke-width 180ms,opacity 180ms,stroke-dasharray 200ms}
+.pnc-dash .position-arc:focus-visible{outline:none;filter:brightness(.85)}
+.pnc-dash .position-center{font-family:inherit;font-size:14px;font-weight:500;fill:#171717;pointer-events:none}
+.pnc-dash .position-amounts{display:grid;gap:0;min-width:0}
+.pnc-dash .position-amount{display:block;text-align:left;background:#fff;border:0;padding:14px 0;border-radius:0;cursor:pointer;min-width:0}
+.pnc-dash .position-amount+.position-amount{border-top:1px solid #e8e8e8}
+.pnc-dash .position-amount>span{display:flex;gap:7px;align-items:center;font-size:11px;color:#737373}
+.pnc-dash .position-amount i{height:7px;width:7px;border-radius:50%;flex-shrink:0}
+.pnc-dash .position-amount>strong{display:block;font-size:clamp(20px,2vw,28px);font-weight:600;letter-spacing:-.8px;margin-top:6px;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.pnc-dash .position-amount:hover>span{color:#171717}
+.pnc-dash .position-tooltip{position:absolute;bottom:0;left:50%;transform:translateX(-50%);z-index:1;padding:9px 12px;border:1px solid #e8e8e8;border-radius:8px;background:#fff;white-space:nowrap;pointer-events:none;font-size:10px}
+.pnc-dash .position-tooltip strong,.pnc-dash .position-tooltip small{display:block;margin-top:4px}.pnc-dash .position-tooltip small{font-size:8px;color:#737373}
+.pnc-dash .position-empty{font-size:11px;color:#737373;line-height:1.5;margin-top:8px}
+.pnc-dash .position-disclosure{padding:10px 25px 16px;border-top:1px solid #eee;font-size:10px;line-height:1.6;color:#737373;margin:0}
+.pnc-dash .position-details{margin:0 25px;padding:12px 0;border-top:1px solid #e8e8e8}.pnc-dash .position-details h3{font-size:13px;font-weight:500;margin:0 0 8px}.pnc-dash .position-details ul{padding:0;margin:0;list-style:none}.pnc-dash .position-details li{display:flex;justify-content:space-between;gap:12px;font-size:12px;padding:6px 0}.pnc-dash .position-details strong{font-weight:500}.pnc-dash .position-details p{font-size:11px;color:#737373;line-height:1.5}
+@media(max-width:1050px) and (min-width:761px){.pnc-dash .position-body{grid-template-columns:minmax(130px,170px) minmax(0,1fr);gap:14px;padding:16px}.pnc-dash .position-amount>strong{font-size:20px}.pnc-dash .position-amount>span{font-size:10px}}
+@media(max-width:420px){.pnc-dash .position-body{grid-template-columns:1fr;gap:4px;padding:14px 20px 10px}.pnc-dash .position-ring{max-width:180px}.pnc-dash .position-amounts{width:100%}.pnc-dash .position-amount{padding:12px 0}.pnc-dash .position-amount>strong{font-size:24px}}
+@media(prefers-reduced-motion:reduce){.pnc-dash .position-arc{transition:none}}

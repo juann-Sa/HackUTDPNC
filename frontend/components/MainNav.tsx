@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 
-export type AppSection = 'past' | 'home' | 'coach' | 'health' | 'future'
+export type AppSection = 'past' | 'home' | 'coach' | 'health' | 'future' | 'account'
 
 const TABS: { id: AppSection; href: string; label: string }[] = [
   { id: 'past', href: '/past', label: 'Past' },

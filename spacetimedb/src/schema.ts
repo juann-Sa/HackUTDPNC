@@ -469,6 +469,7 @@ export const qa = table(
     rejected_reason: t.string(),
     scenario_json: t.option(t.string()).default(undefined),
     created_at: t.timestamp(),
+    scenario_json: t.option(t.string()).default(undefined),
   }
 );
 
@@ -611,6 +612,7 @@ const spacetimedb = schema({
   timelineWhatif,
   futureScenario,
   qa,
+  futureScenario,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:

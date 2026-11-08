@@ -1,4 +1,4 @@
-﻿'use client'
+'use client'
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -19,7 +19,7 @@ export default function AppHeader({ current }: { current: AppSection }) {
     <Link className="brand" href="/home" aria-label="PNC home">PNC</Link>
     <MainNav current={current} variant="dash" />
     <div className="account-wrap" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}>
-      <button className="account-button" aria-expanded={open} onClick={() => setOpen(!open)}><span className="avatar"><UserRound size={17} /></span><span>{customer}</span><ChevronDown size={14} /></button>
+      <button className="account-button" aria-label="My Account" onClick={() => router.push("/account")}><span className="avatar"><UserRound size={17} /></span><span>{customer}</span></button><button className="account-options-button" aria-label="Account options" aria-expanded={open} onClick={() => setOpen(!open)}><ChevronDown size={14} /></button>
       {open && <div className="dropdown account-menu"><strong>{user ? user.name || user.email : 'Guest'}</strong><p>Viewing {customer}</p><button onClick={() => { if (user) endSession(); router.push('/signin') }}>{user ? 'Sign out' : 'Sign in'}</button><button onClick={() => setOpen(false)}>Close menu</button></div>}
     </div>
   </div></header></div>

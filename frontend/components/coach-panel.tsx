@@ -2,9 +2,14 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 
 import "./coach-panel.css";
+import { Bot } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useLiveData } from "./live-data-provider";
+<<<<<<< HEAD
 import type { CoachScenario, QaRow, ScenarioForecastPoint } from "@/lib/live-data";
+=======
+import type { QaRow, CoachScenario, ScenarioForecastPoint } from "@/lib/live-data";
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
 
 const EXAMPLES = [
   "If I buy a $30,000 car with $5,000 down, will I still have enough for emergencies?",
@@ -19,7 +24,11 @@ const VERDICT: Record<string, string> = { comfortable: "Comfortable", tight: "Ti
 interface Answer { question: string; answer: string; verdict: string; interpretation: string; supported: boolean; source: string }
 interface AskResponse extends Omit<Answer, "question"> { error?: string; scenario?: CoachScenario | null; forecast?: ScenarioForecastPoint[] }
 
+<<<<<<< HEAD
 export default function CoachPanel({ navigateOnAsk = false, initialQuestion = "", suggestions = EXAMPLES, onScenario }: { navigateOnAsk?: boolean; initialQuestion?: string; suggestions?: string[]; onScenario?: (scenario: CoachScenario, forecast: ScenarioForecastPoint[]) => void }) {
+=======
+export default function CoachPanel({ navigateOnAsk = false, initialQuestion = "", suggestions, onScenario }: { navigateOnAsk?: boolean; initialQuestion?: string; suggestions?: string[]; onScenario?: (scenario:CoachScenario,forecast:ScenarioForecastPoint[])=>void }) {
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
   const router = useRouter();
   const autoAsked = useRef(false);
   const { customerId, data, reload, loading } = useLiveData();
@@ -35,10 +44,17 @@ export default function CoachPanel({ navigateOnAsk = false, initialQuestion = ""
     setBusy(true); setError(null); setQuestion(text);
     try {
       const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, question: text }) });
+<<<<<<< HEAD
       const body = await r.json() as AskResponse;
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
       setCurrent({ question: text, ...body });
       if (body.scenario && body.forecast?.length) onScenario?.(body.scenario, body.forecast);
+=======
+      const body = await r.json() as Omit<Answer,"question"> & { error?: string; scenario?: CoachScenario | null; forecast?: ScenarioForecastPoint[] };
+      if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
+      setCurrent({ question: text, ...body });
+      if(body.scenario) onScenario?.(body.scenario,body.forecast ?? []);
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
       reload();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -55,13 +71,17 @@ export default function CoachPanel({ navigateOnAsk = false, initialQuestion = ""
     .slice(0, 4);
 
   return <section className="panel coach-panel" aria-labelledby="coach-title">
-    <div className="panel-heading"><div><h2 id="coach-title">Ask the coach</h2></div></div>
+    <div className="panel-heading"><div><h2 id="coach-title"><Bot size={18} strokeWidth={1.7} aria-label="AI chatbot" /> Ask the coach</h2></div></div>
     <form className="coach-form" onSubmit={submit}>
       <label htmlFor="coach-question" className="sr-only">Your question</label>
       <input id="coach-question" value={question} maxLength={300} placeholder="e.g. Can I afford a $1,500 laptop in December?" onChange={event => setQuestion(event.target.value)} disabled={busy} />
       <button type="submit" disabled={busy || !question.trim()}>{busy ? "Thinking…" : "Ask"}</button>
     </form>
+<<<<<<< HEAD
     <div className="coach-examples" aria-label="Example questions">{suggestions.map(q => <button key={q} type="button" disabled={busy} onClick={() => void ask(q)}>{q}</button>)}</div>
+=======
+    <div className="coach-examples" aria-label="Example questions">{(suggestions ?? EXAMPLES).map(q => <button key={q} type="button" disabled={busy} onClick={() => void ask(q)}>{q}</button>)}</div>
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af
     <div aria-live="polite">
       {busy && <p className="coach-status">Running the simulations and checking the answer… this can take a few seconds.</p>}
       {error && <p className="coach-error" role="alert">{error}</p>}

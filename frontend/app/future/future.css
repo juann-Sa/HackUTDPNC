@@ -68,3 +68,10 @@
   .pnc-dash .future-reset-button,.pnc-dash .future-apply-button{width:calc(100% - 36px);margin-left:18px;margin-right:18px}
   .pnc-dash .future-page>.future-main>.coach-panel .coach-examples{grid-template-columns:minmax(0,1fr)}
 }
+<<<<<<< HEAD
+=======
+
+.pnc-dash .future-controls>.future-slider-list{margin-top:12px}
+
+.pnc-dash .future-controls>.future-slider-list{margin-top:22px;gap:24px}
+>>>>>>> 0f7594ede0b8bc320ca205956f62ad538e86a7af

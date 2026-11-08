@@ -1,0 +1,11 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { goalMetrics, validGoal } from './goal-model.ts';
+const base = { id: 'test', name: 'Emergency fund', term: 'short', target: 5000, saved: 3500, date: '2027-05-08', description: '', accountId: '' };
+const now = new Date(2026, 10, 8, 12);
+test('calculates progress and monthly savings over six months', () => { const result = goalMetrics(base, now); assert.equal(result.progress, 70); assert.equal(result.monthly, 250); });
+test('caps completed goals at 100% without negative savings requirements', () => { const result = goalMetrics({ ...base, saved: 6000 }, now); assert.equal(result.progress, 100); assert.equal(result.monthly, 0); assert.equal(result.completed, true); });
+test('handles overdue goals without dividing by zero', () => { const result = goalMetrics({ ...base, date: '2026-10-08' }, now); assert.equal(result.overdue, true); assert.equal(result.monthly, null); });
+test('supports multi-year retirement dates', () => { const result = goalMetrics({ ...base, term: 'long', target: 120000, saved: 0, date: '2036-11-08' }, now); assert.equal(result.monthly, 1000); });
+test('uses at least one month for an imminent deadline', () => { assert.equal(goalMetrics({ ...base, date: '2026-11-09' }, now).monthly, 1500); });
+test('rejects invalid persisted balances and malformed goals', () => { assert.equal(validGoal({ ...base, saved: -1 }), false); assert.equal(validGoal({ ...base, target: 0 }), false); assert.equal(validGoal({ ...base, saved: Infinity }), false); assert.equal(validGoal(null), false); assert.equal(validGoal(base), true); });
