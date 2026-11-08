@@ -10,9 +10,16 @@ export interface LedgerRow { posted_date: string; account_id: string; account_ty
 export interface StatementRow { account_id: string; month: string; closing_cents: number }
 export interface PnlRow { month: string; income_cents: number; spending_cents: number; delta_net_worth_cents: number }
 export interface SnapshotRow { as_of: string; net_worth_cents: number; liquid_cents: number; total_assets_cents: number; total_debt_cents: number; monthly_outflow_cents: number; runway_months: number | null; utilization: number | null }
-export interface PayoffRow { account_id: string; account_type: string; apr_pct: number; payoff_months: number | null; payoff_month: string | null; coach_payoff_months: number | null; coach_payoff_month: string | null }
-export interface PlanRow { consumer_free_month: string | null; coach_consumer_free_month: string | null; interest_saved_cents: number }
+export interface PayoffRow { account_id: string; account_type: string; apr_pct: number; payoff_months: number | null; payoff_month: string | null; coach_payoff_months: number | null; coach_payoff_month: string | null; snowball_payoff_month?: string | null }
+export interface PlanRow { consumer_free_month: string | null; coach_consumer_free_month: string | null; interest_saved_cents: number; snowball_consumer_free_month?: string | null; snowball_extra_interest_cents?: number }
 export interface DangerRow { date: string; p_below: number; reasons: string }
+export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
+export interface TimelineRow { day_offset: number; date: string; actual_net_cash_cents: number | null; actual_liquid_cents: number | null; continue_low_cents: number | null; continue_mid_cents: number | null; continue_high_cents: number | null; coach_low_cents: number | null; coach_mid_cents: number | null; coach_high_cents: number | null }
+export interface WhatifRow { day_offset: number; date: string; low_cents: number; mid_cents: number; high_cents: number; label: string }
+export interface CoachActionRow { kind: string; amount_cents: number; fraction: number; annual_saving_cents: number; p_low_before: number; p_low_after: number; detail: string; driver: string; es_before_cents: number; es_after_cents: number }
+export interface ForecastRunRow { scenario: string; label: string; p_low: number; threshold_cents: number; end_liquid_p5_cents: number; end_liquid_p50_cents: number; end_liquid_p95_cents: number; horizon_days: number }
+export interface GoalRow { goal_id: string; name: string; kind: string; target_cents: number; target_date: string }
+export interface GoalResultRow { goal_id: string; days_to_goal: number; p_success: number; low_cents: number; mid_cents: number; high_cents: number; needed_80_cents: number | null; needed_95_cents: number | null; p_with_needed_80: number | null; needed_share_of_extras: number | null }
 export interface CustomerRow { customer_id: string; credit_limit_cents: number }
 
 export interface CustomerData {
@@ -26,6 +33,13 @@ export interface CustomerData {
   debt_payoff: PayoffRow[];
   debt_plan: PlanRow[];
   danger_day: DangerRow[];
+  qa?: QaRow[];
+  timeline_360?: TimelineRow[];
+  timeline_whatif?: WhatifRow[];
+  coach_action?: CoachActionRow[];
+  forecast_run?: ForecastRunRow[];
+  goal?: GoalRow[];
+  goal_result?: GoalResultRow[];
 }
 
 const BUFFER_MONTHS = 3; // same cushion the backend coach keeps
@@ -149,7 +163,11 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
       metrics: loans.map(l => {
         const p = payoff.get(l.account_id);
         return { label: `${prettyType(l.account_type)} · ${l.apr_pct}% APR · ${money(l.balance_cents)}`, value: p ? `Paid off ${payoffLabel(p.payoff_months, p.payoff_month)} (plan: ${payoffLabel(p.coach_payoff_months, p.coach_payoff_month)})` : money(l.monthly_payment_cents) + "/mo" };
-      }).concat(plan && plan.interest_saved_cents > 0 ? [{ label: "Interest the plan saves", value: money(plan.interest_saved_cents) }] : []),
+      }).concat(plan && plan.interest_saved_cents > 0 ? [{ label: "Interest the plan saves", value: money(plan.interest_saved_cents) }] : [])
+        .concat(plan && plan.snowball_extra_interest_cents != null && (plan.snowball_consumer_free_month !== undefined) ? [{
+          label: "Smallest-first (snowball)",
+          value: `Debt-free ${monthLabel(plan.snowball_consumer_free_month)}, ${Math.abs(plan.snowball_extra_interest_cents) < 100 ? "same interest" : `${money(Math.abs(plan.snowball_extra_interest_cents))} ${plan.snowball_extra_interest_cents > 0 ? "more" : "less"} interest`}`,
+        }] : []),
       progress: opened > 0 ? { label: "Principal repaid (past 2 years)", value: Math.round(100 * repaid), detail: `${pct(repaid, 0)} of loan balances repaid since the history began` } : undefined,
     },
     investment: {
@@ -247,3 +265,88 @@ export function paymentsFor(d: CustomerData, month: number, year: number): LiveP
       };
     });
 }
+
+// ---------- 360° timeline (Health page) ----------
+export interface TimelinePoint {
+  day: number; date: string;
+  actual: number | null; // dollars: cash minus high-interest debt (net cash)
+  continueMid: number | null; continueBand: [number, number] | null;
+  coachMid: number | null; coachBand: [number, number] | null;
+  whatifMid: number | null;
+  cushion: number | null; // months of bills that net cash covers (actual in the past, "if nothing changes" ahead)
+}
+
+export function timelineFor(d: CustomerData): { points: TimelinePoint[]; whatifLabel: string | null; monthlyBills: number } {
+  const bills = d.book_snapshot[0]?.monthly_outflow_cents ?? 0;
+  const wi = new Map((d.timeline_whatif ?? []).map(w => [w.day_offset, w]));
+  const D = (c: number | null | undefined) => (c == null ? null : c / 100);
+  const points = (d.timeline_360 ?? []).slice().sort((a, b) => a.day_offset - b.day_offset).map(r => {
+    const w = wi.get(r.day_offset);
+    const now = r.actual_net_cash_cents ?? r.continue_mid_cents;
+    return {
+      day: r.day_offset, date: r.date,
+      actual: D(r.actual_net_cash_cents),
+      continueMid: D(r.continue_mid_cents),
+      continueBand: r.continue_low_cents != null && r.continue_high_cents != null ? [r.continue_low_cents / 100, r.continue_high_cents / 100] as [number, number] : null,
+      coachMid: D(r.coach_mid_cents),
+      coachBand: r.coach_low_cents != null && r.coach_high_cents != null ? [r.coach_low_cents / 100, r.coach_high_cents / 100] as [number, number] : null,
+      whatifMid: w && r.day_offset >= 0 ? w.mid_cents / 100 : null,
+      cushion: now != null && bills > 0 ? now / bills : null,
+    };
+  });
+  // join the future lines to today's actual so the chart has no gap at day 0
+  const today = points.find(p => p.day === 0);
+  if (today && today.actual != null) {
+    today.continueMid ??= today.actual; today.coachMid ??= today.actual;
+    if (wi.size) today.whatifMid ??= today.actual;
+  }
+  return { points, whatifLabel: (d.timeline_whatif ?? [])[0]?.label ?? null, monthlyBills: bills / 100 };
+}
+
+// ---------- Future page ----------
+export interface FutureMoments {
+  today: { date: string; cents: number } | null;
+  low: { date: string; day: number; cents: number; lowCents: number } | null;
+  recovery: { date: string; day: number } | null; // first day after the low back at today's level
+  /** stretches of consecutive risky days (≥1% chance checking < $100), worst first, at most 4 */
+  riskyDays: { start: string; end: string; days: number; pBelow: number; reasons: string }[];
+  stress: { label: string; pLow: number; endCents: number; thresholdCents: number }[];
+}
+
+export function futureFor(d: CustomerData): FutureMoments {
+  const t = (d.timeline_360 ?? []).slice().sort((a, b) => a.day_offset - b.day_offset);
+  const t0 = t.find(r => r.day_offset === 0);
+  const fut = t.filter(r => r.day_offset > 0 && r.continue_mid_cents != null);
+  const todayCents = t0?.actual_net_cash_cents ?? null;
+  let low: FutureMoments['low'] = null;
+  for (const r of fut) if (!low || r.continue_mid_cents! < low.cents) low = { date: r.date, day: r.day_offset, cents: r.continue_mid_cents!, lowCents: r.continue_low_cents ?? r.continue_mid_cents! };
+  let recovery: FutureMoments['recovery'] = null;
+  if (low && todayCents != null && low.cents < todayCents) {
+    const back = fut.find(r => r.day_offset > low!.day && r.continue_mid_cents! >= todayCents);
+    if (back) recovery = { date: back.date, day: back.day_offset };
+  }
+  // flag days at 5%+ when there are any (else 1%+), so a long mildly-risky period doesn't swamp the real spikes
+  const all = d.danger_day ?? [];
+  const cut = all.some(x => x.p_below >= 0.05) ? 0.05 : 0.01;
+  const risky = all.filter(x => x.p_below >= cut).sort((a, b) => (a.date < b.date ? -1 : 1));
+  const counts = new Map<string, Map<string, number>>();
+  const stretches: FutureMoments['riskyDays'] = [];
+  const nextDay = (iso: string) => { const t = new Date(`${iso}T12:00:00Z`); t.setUTCDate(t.getUTCDate() + 1); return t.toISOString().slice(0, 10); };
+  for (const x of risky) {
+    const s = stretches[stretches.length - 1];
+    const reasons = x.reasons ? x.reasons.split(', ') : [];
+    if (s && nextDay(s.end) === x.date) {
+      s.end = x.date; s.days++; s.pBelow = Math.max(s.pBelow, x.p_below);
+    } else stretches.push({ start: x.date, end: x.date, days: 1, pBelow: x.p_below, reasons: '' });
+    const key = stretches[stretches.length - 1].start;
+    const c = counts.get(key) ?? new Map<string, number>();
+    for (const r of reasons) c.set(r, (c.get(r) ?? 0) + 1);
+    counts.set(key, c);
+  }
+  for (const s of stretches) s.reasons = [...(counts.get(s.start) ?? new Map()).entries()].sort((a, b) => b[1] - a[1]).slice(0, 3).map(e => e[0]).join(', ');
+  const riskyDays = stretches.sort((a, b) => b.pBelow - a.pBelow).slice(0, 4).sort((a, b) => (a.start < b.start ? -1 : 1));
+  const stress = (d.forecast_run ?? []).filter(r => r.scenario.startsWith('stress_')).map(r => ({ label: r.label, pLow: r.p_low, endCents: r.end_liquid_p50_cents, thresholdCents: r.threshold_cents }));
+  return { today: t0 && todayCents != null ? { date: t0.date, cents: todayCents } : null, low, recovery, riskyDays, stress };
+}
+
+export const prettyDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });

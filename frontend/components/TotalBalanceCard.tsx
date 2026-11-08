@@ -1,6 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
-import { bankBalance, demoBankOptions, initialBanks, type ConnectedBank } from "@/lib/bank-data";
+import { bankBalance, demoBankOptions, type ConnectedBank } from "@/lib/bank-data";
 import { banksFor } from "@/lib/live-data";
 import { useLiveData } from "./live-data-provider";
 
@@ -9,7 +9,7 @@ const cents = (value: number) => `.${String(Math.round(Math.abs(value) * 100) % 
 
 export default function TotalBalanceCard() {
  const { data, customerId, call } = useLiveData();
- const banks: ConnectedBank[] = data ? banksFor(data) : initialBanks;
+ const banks: ConnectedBank[] = data ? banksFor(data) : [];
  const [selected, setSelected] = useState("all");
  const [busy, setBusy] = useState(false);
  const [error, setError] = useState<string | null>(null);
@@ -29,7 +29,7 @@ export default function TotalBalanceCard() {
  }
  return <div className="balance-card bank-balance-card">
   <div className="balance-label"><span>{bank ? `${bank.name} Balance` : "Total Balance"}</span><span className="balance-badge">{bank ? bank.name.toUpperCase() : "ALL ACCOUNTS"}</span></div>
-  <div className="balance-value" aria-live="polite" aria-atomic="true"><span key={selected} className="bank-balance-number">{whole(balance)}</span><span>{cents(balance)}</span></div>
+  <div className="balance-value" aria-live="polite" aria-atomic="true">{data ? <><span key={selected} className="bank-balance-number">{whole(balance)}</span><span>{cents(balance)}</span></> : <span className="bank-balance-number">…</span>}</div>
   <div className="bank-selection" role="group" aria-label="Select bank balance">
    <button aria-pressed={selected === "all"} onClick={() => setSelected("all")}>All Accounts</button>
    {banks.map(item => <button key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{item.name}</button>)}

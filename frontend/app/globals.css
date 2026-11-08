@@ -53,6 +53,121 @@ a {
   text-decoration: none;
 }
 
+.bank-balance-card .balance-value{font-size:42px}
+@media(max-width:1050px){.bank-balance-card .balance-value{font-size:38px}}
+
+.bank-balance-card .balance-value{font-weight:400}
+
+/* Compact payment header and inline due dates. */
+.payments-panel .panel-heading{gap:14px;padding-bottom:16px;flex-wrap:wrap}
+.payments-panel .month-nav{margin:0 0 0 auto;padding:0;border:0;gap:8px;flex-shrink:0}
+.payments-panel .payment-list{border-top:1px solid #f1f1f1;margin:0 25px;padding:0}
+.payments-panel .bill-title-row{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.payments-panel .bill-info strong,.payments-panel .bill-amount{font-size:16px;font-weight:500}
+.payments-panel .bill-date{font-size:12px;color:var(--muted);white-space:nowrap}
+.payments-panel .bill-status{font-size:10px;color:#999}
+.payments-panel .payment-footer{align-items:center;color:#171717;font-size:16px}
+.payments-panel .payment-footer strong{font-size:16px}
+@media(max-width:760px){.payments-panel .month-nav{gap:3px}.payments-panel .bill-title-row{gap:10px}}
+
+.payments-panel .bill-info strong{color:#171717}
+.payments-panel .bill-info{justify-content:center;gap:0}
+.payments-panel .bill-title-row{align-items:center}
+
+.payments-panel .payment-footer>span{font-weight:600}
+
+.payments-panel .payment-footer strong{color:var(--orange)}
+.account-change[data-direction="positive"]{color:#22c55e}
+.account-change[data-direction="negative"]{color:#e5484d}
+
+.bank-balance-card .balance-value>span:last-child{font-size:.8em}
+
+/* live-data additions */
+.live-error { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #f3c2c2; background: #fff5f5; color: #9b1c1c; border-radius: 10px; font-size: 13px; }
+.as-of { margin: 4px 0 0; color: #737373; font-size: 13px; }
+.customer-picker { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; font-size: 13px; }
+.customer-picker select { font: inherit; padding: 4px 6px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; }
+.bill-risk { color: #b45309; }
+.payments-note { margin: 8px 25px 10px; color: #737373; font-size: 12px; }
+.payments-panel .bill-date .bill-risk { white-space: normal; }
+
+/* ask the coach */
+.coach-panel { margin-top: 24px; padding-bottom: 22px; }
+.coach-panel .panel-heading { padding-bottom: 16px; }
+.coach-panel h2 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 500; letter-spacing: -.55px; }
+.coach-sub { margin: 6px 0 0; color: #737373; font-size: 13px; }
+.coach-form { display: flex; gap: 10px; margin: 0 25px; }
+.coach-form input { flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 12px 14px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fff; }
+.coach-form input:focus { outline: 2px solid #f58025; outline-offset: 1px; }
+.coach-form button { font: inherit; font-weight: 500; padding: 0 20px; border: 0; border-radius: 10px; background: #f58025; color: #fff; cursor: pointer; }
+.coach-form button:disabled { opacity: .55; cursor: default; }
+.coach-examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 25px 0; }
+.coach-examples button { font: inherit; font-size: 12px; padding: 6px 10px; border: 1px solid #ececec; border-radius: 999px; background: #fafafa; color: #404040; cursor: pointer; }
+.coach-examples button:hover:not(:disabled) { border-color: #f5b98a; background: #fff7f0; }
+.coach-status, .coach-error { margin: 16px 25px 0; font-size: 13px; color: #737373; }
+.coach-error { color: #9b1c1c; }
+.coach-answer { margin: 16px 25px 0; padding: 16px 18px; border: 1px solid #eee; border-radius: 12px; background: #fcfcfc; }
+.coach-answer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 15px; }
+.coach-read { margin: 8px 0 0; font-size: 12px; color: #737373; }
+.coach-text { margin: 10px 0; font-size: 15px; line-height: 1.55; color: #262626; white-space: pre-wrap; }
+.coach-answer small { color: #8a8a8a; font-size: 11px; }
+.coach-verdict { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.coach-verdict[data-verdict="comfortable"] { background: #e8f8ee; color: #15803d; }
+.coach-verdict[data-verdict="tight"] { background: #fff4e0; color: #b45309; }
+.coach-verdict[data-verdict="risky"] { background: #fdecec; color: #b91c1c; }
+.coach-history { margin: 18px 25px 0; border-top: 1px solid #f1f1f1; padding-top: 12px; }
+.coach-history h3 { margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #737373; }
+.coach-history summary { cursor: pointer; padding: 6px 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 640px) { .coach-form { flex-direction: column; } .coach-form button { padding: 12px; } }
+
+/* disclaimer and data notes */
+.coach-disclaimer { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid #f1f1f1; font-size: 11px; line-height: 1.5; color: #8a8a8a; }
+.coach-data-note { margin: 12px 25px 0; font-size: 11px; color: #8a8a8a; }
+
 a:hover {
   text-decoration: underline;
 }
+
+/* coach actions + goals */
+.coach-actions, .goals-panel { padding-bottom: 22px; }
+.coach-actions .panel-heading, .goals-panel .panel-heading { padding-bottom: 14px; }
+.actions-empty { margin: 4px 25px; font-size: 13px; color: #737373; list-style: none; }
+.action-list, .goal-list { list-style: none; margin: 0 25px; padding: 0; display: grid; gap: 12px; }
+.action-card, .goal-card { border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; background: #fcfcfc; }
+.action-card strong { font-size: 15px; font-weight: 600; }
+.action-card p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: #525252; }
+.action-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #f4f4f5; color: #3f3f46; }
+.chip-good { background: #e8f8ee; color: #15803d; }
+.chip-warn { background: #fff4e0; color: #b45309; }
+.goal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.goal-head strong { display: block; font-size: 15px; font-weight: 600; }
+.goal-head span { display: block; margin-top: 2px; font-size: 12px; color: #737373; }
+.goal-meter { height: 8px; margin-top: 12px; border-radius: 999px; background: #f1f1f1; overflow: hidden; }
+.goal-meter span { display: block; height: 100%; border-radius: 999px; background: #e5484d; }
+.goal-meter span[data-level="ok"] { background: #f5a623; }
+.goal-meter span[data-level="good"] { background: #22c55e; }
+.goal-line, .goal-tip { margin: 8px 0 0; font-size: 13px; color: #404040; line-height: 1.5; }
+.goal-tip { color: #525252; }
+.goal-form { display: grid; grid-template-columns: 1.4fr 1fr .8fr 1fr auto; gap: 8px; margin: 14px 25px 0; }
+.goal-form input, .goal-form select { min-width: 0; font: inherit; font-size: 13px; padding: 9px 10px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
+.goal-form button { font: inherit; font-size: 13px; font-weight: 500; padding: 0 14px; border: 0; border-radius: 8px; background: #f58025; color: #fff; }
+.goal-form button:disabled { opacity: .55; }
+.goal-note { margin: 8px 25px 0; font-size: 11px; color: #8a8a8a; }
+@media (max-width: 1100px) { .goal-form { grid-template-columns: 1fr 1fr; } .goal-form button { padding: 10px; } }
+
+/* .pnc-dash resets p margins (higher specificity); restore spacing for the live-data panels */
+.pnc-dash .as-of { margin: 4px 0 0; }
+.pnc-dash .coach-sub { margin: 6px 0 0; }
+.pnc-dash .coach-read { margin: 8px 0 0; }
+.pnc-dash .coach-text { margin: 10px 0; }
+.pnc-dash .coach-status, .pnc-dash .coach-error { margin: 16px 25px 0; }
+.pnc-dash .payments-note { margin: 8px 25px 10px; }
+.pnc-dash .actions-empty { margin: 4px 25px; }
+.pnc-dash .action-card p { margin: 6px 0 0; }
+.pnc-dash .goal-line, .pnc-dash .goal-tip { margin: 8px 0 0; }
+.pnc-dash .goal-note { margin: 8px 25px 0; }
+.pnc-dash .page-heading + .coach-panel { margin-top: 0; }
+.pnc-dash .coach-data-note { margin: 12px 25px 0; }
+.pnc-dash .coach-disclaimer { margin: 8px 0 0; }

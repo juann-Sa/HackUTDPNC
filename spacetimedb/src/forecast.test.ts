@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSchedule, type LedgerRow, type AccountRow } from './math/schedule';
-import { DEFAULT_ASSUMPTIONS, makeTapes, runForecast } from './math/forecast';
+import { DEFAULT_ASSUMPTIONS, amortizedPayment, makeTapes, runForecast } from './math/forecast';
 import { analyze, RISK_CAP } from './math/coach';
 import { Draws, Tape, invNorm, seedFromString } from './math/rng';
-import { evaluateQuestion, parseScenario, verdict } from './math/ask';
+import { PARSE_PROMPT, ROUTE_TOPICS, evaluateQuestion, parseScenario, verdict } from './math/ask';
 import { auditReply } from './math/narrate';
 import { addMonths, simulatePayoff } from './math/payoff';
 
@@ -190,5 +190,99 @@ describe('debt payoff', () => {
     expect(addMonths('2026-10-31', 3)).toBe('2027-01');
     expect(addMonths('2026-10-31', 14)).toBe('2027-12');
     expect(addMonths('2026-10-31', 0)).toBe('2026-10');
+  });
+});
+
+describe('financed purchase (car loan)', () => {
+  const { ledger, accounts } = customer('C006');
+  const s = buildSchedule(ledger, accounts, '2026-10-31', 180);
+  const a = { ...DEFAULT_ASSUMPTIONS, pairs: 150 };
+  it('amortized payment matches the standard formula', () => {
+    // $25,000 at 7.5% for 60 months = $500.95/month
+    expect(Math.round(amortizedPayment(2_500_000, 7.5, 60))).toBe(50_095);
+    expect(amortizedPayment(1_200_000, 0, 12)).toBe(100_000);
+  });
+  it('parses a car question, filling assumed terms, and clamps', () => {
+    const p = parseScenario('{"supported": true, "purchase_kind": "car", "purchase_price_cents": 3000000, "down_payment_cents": 500000, "loan_apr_pct": null, "loan_term_months": null, "purchase_in_days": 400}');
+    expect(p.purchase).toMatchObject({ kind: 'car', priceCents: 3_000_000, downCents: 500_000, aprPct: 7.5, termMonths: 60, inDays: 179, aprGiven: false });
+    expect(parseScenario('{"supported": true, "purchase_price_cents": 100000, "down_payment_cents": 900000}').purchase!.downCents).toBe(100_000);
+    expect(parseScenario('{"supported": true}').purchase).toBeUndefined();
+  });
+  it('a $30k car with $5k down: down payment and monthly payments hit cash; facts state cushion and DTI', () => {
+    const p = parseScenario('{"supported": true, "purchase_kind": "car", "purchase_price_cents": 3000000, "down_payment_cents": 500000, "purchase_in_days": 30}');
+    const base = parseScenario('{"supported": true}');
+    const ev = evaluateQuestion(s, 503699, p, seedFromString('C006'), a, { incomeCents: 419905, debtPaymentsCents: 217218 });
+    const ev0 = evaluateQuestion(s, 503699, base, seedFromString('C006'), a);
+    // same random draws: before day 30 identical, after it lower by the down payment plus the payments made
+    expect(ev.whatIf.bands[29].p50).toBeCloseTo(ev0.whatIf.bands[29].p50, 0);
+    const gap = ev0.whatIf.bands[180].p50 - ev.whatIf.bands[180].p50;
+    expect(gap).toBeGreaterThan(500_000 + 4 * 50_000);
+    expect(gap).toBeLessThan(500_000 + 6 * 51_000);
+    const keys = ev.facts.map(f => f.key);
+    expect(keys).toEqual(expect.arrayContaining(['ask_payment', 'ask_cushion', 'ask_dti', 'ask_assumed']));
+    expect(ev.facts.find(f => f.key === 'ask_payment')!.text).toContain('$501 a month');
+    expect(ev.facts.find(f => f.key === 'ask_dti')!.text).toMatch(/52% now, 64% with the new loan/);
+    expect(ev.cushionAfter!).toBeLessThan(ev.cushionNow);
+    expect(ev.interpretation).toMatch(/\$30,000 car in 30 days with \$5,000 down, borrowing \$25,000 at 7.5% for 60 months/);
+    // the template fallback passes the number audit
+    expect(auditReply(ev.fallback, ev.facts).ok).toBe(true);
+  });
+  it('verdict caps at tight below a 3-month cushion and risky below 1 month', () => {
+    expect(verdict(0.01, 900_000, 300_000, 2.5)).toBe('tight');
+    expect(verdict(0.01, 900_000, 300_000, 0.5)).toBe('risky');
+    expect(verdict(0.01, 900_000, 300_000, 4)).toBe('comfortable');
+  });
+});
+
+describe('question router', () => {
+  it('sends non-what-if questions to a summary topic and rejects unknown topics', () => {
+    expect(parseScenario('{"supported": false, "topic": "coach"}').topic).toBe('coach');
+    expect(parseScenario('{"supported": false, "topic": "risk"}').topic).toBe('risk');
+    expect(parseScenario('{"supported": false, "topic": "weather"}').topic).toBe('none');
+    expect(parseScenario('{"supported": false}').topic).toBe('none');
+    expect(parseScenario('garbage').topic).toBe('none');
+  });
+  it('the prompt lists every routable topic', () => {
+    for (const t of ROUTE_TOPICS) expect(PARSE_PROMPT).toContain(`"${t}"`);
+  });
+});
+
+describe('snowball vs avalanche', () => {
+  // small low-rate loan vs big high-rate card: snowball clears the small one first but pays more interest
+  const debts = [
+    { id: 'C', type: 'credit_card', balance: 900_000, aprPct: 22.5, payment: 0, isCard: true, paydown: 15_000 },
+    { id: 'S', type: 'auto_loan', balance: 150_000, aprPct: 5, payment: 10_000, isCard: false, paydown: 0 },
+    { id: 'M', type: 'mortgage', balance: 5_000_000, aprPct: 6.5, payment: 40_000, isCard: false, paydown: 0 },
+  ];
+  it('default order is avalanche (unchanged)', () => {
+    expect(simulatePayoff(debts, 100_000, true)).toEqual(simulatePayoff(debts, 100_000, true, 'avalanche'));
+  });
+  it('snowball moves cash to the smallest balance and costs more interest', () => {
+    const av = simulatePayoff(debts, 100_000, true, 'avalanche');
+    const sn = simulatePayoff(debts, 100_000, true, 'snowball');
+    expect(av.debts[0].months!).toBeLessThanOrEqual(sn.debts[0].months!); // card never later under avalanche
+    expect(sn.debts[1].months!).toBeLessThan(av.debts[1].months!); // small loan cleared sooner by snowball
+    expect(sn.totalInterest).toBeGreaterThan(av.totalInterest);
+  });
+  it('snowball never sends the cash move to the mortgage', () => {
+    const sn = simulatePayoff([debts[2]], 100_000, true, 'snowball');
+    expect(sn.debts[0].balance).toBe(5_000_000);
+    expect(sn.totalInterest).toBeCloseTo(simulatePayoff([debts[2]], 0, true, 'snowball').totalInterest, 0);
+  });
+});
+
+describe('number audit spacing', () => {
+  it('accepts "0.3 %" (space or no-break space before %) as 0.3%', () => {
+    const facts = [{ key: 'ask_risk', text: 'Chance cash drops below $500 in the next 180 days: 0.0% now, 0.3% with this change' }];
+    expect(auditReply('The chance your cash drops below $500 rises to 0.3 % with this change.', facts).ok).toBe(true);
+    expect(auditReply('The chance your cash drops below $500 rises to 0.3 % with this change.', facts).ok).toBe(true);
+    expect(auditReply('The chance your cash drops below $500 rises to 4.3 % with this change.', facts).ok).toBe(false);
+  });
+  it('purchase facts come right after the verdict', () => {
+    const { ledger, accounts } = customer('C006');
+    const s = buildSchedule(ledger, accounts, '2026-10-31', 180);
+    const p = parseScenario('{"supported": true, "purchase_kind": "car", "purchase_price_cents": 3000000, "down_payment_cents": 500000}');
+    const ev = evaluateQuestion(s, 503699, p, seedFromString('C006'), { ...DEFAULT_ASSUMPTIONS, pairs: 60 }, { incomeCents: 419905, debtPaymentsCents: 217218 });
+    expect(ev.facts.map(f => f.key).slice(0, 4)).toEqual(['ask_scenario', 'ask_verdict', 'ask_payment', 'ask_cushion']);
   });
 });

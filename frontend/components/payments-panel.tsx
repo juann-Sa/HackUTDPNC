@@ -1,14 +1,14 @@
 "use client";
 import { useState } from "react";
 import { Check, ChevronLeft, ChevronRight } from "lucide-react";
-import { currency, getPayments } from "@/lib/mock-data";
+import { currency } from "@/lib/mock-data";
 import { paymentsFor, type LivePayment } from "@/lib/live-data";
 import { useLiveData } from "./live-data-provider";
 export default function PaymentsPanel() {
  const [month, setMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
  const [completed, setCompleted] = useState<Set<string>>(new Set());
  const { data } = useLiveData();
- const bills: LivePayment[] = data ? paymentsFor(data, month.getMonth(), month.getFullYear()) : getPayments(month.getMonth(), month.getFullYear()).map(b => ({ ...b, expected: true }));
+ const bills: LivePayment[] = data ? paymentsFor(data, month.getMonth(), month.getFullYear()) : [];
  const expected = bills.some(b => b.expected);
  const moveMonth = (direction: number) => setMonth(previous => new Date(previous.getFullYear(), previous.getMonth() + direction, 1));
  const toggle = (id: string) => setCompleted(previous => { const next = new Set(previous); if (next.has(id)) next.delete(id); else next.add(id); return next; });
