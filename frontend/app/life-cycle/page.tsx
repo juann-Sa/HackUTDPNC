@@ -10,7 +10,8 @@ import {
 } from 'react'
 import {
   Area,
-  AreaChart,
+  ComposedChart,
+  Line,
   CartesianGrid,
   ReferenceDot,
   ReferenceLine,
@@ -19,45 +20,57 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { generateSpendingData, type SpendingPoint } from './mockData'
 import AppHeader from '@/components/AppHeader'
+import LiveDataProvider, { useLiveData } from '@/components/live-data-provider'
+import { timelineFor, type TimelinePoint } from '@/lib/live-data'
 
 /** Shared glassmorphism panel styling. */
 const glass =
   'rounded-3xl border border-white/60 bg-white/60 shadow-[0_24px_70px_-28px_rgba(245,130,31,0.45)] backdrop-blur-xl'
 
 function formatUSD(n: number): string {
-  return `$${Math.round(n).toLocaleString('en-US')}`
+  return `${n < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`
 }
 
 function whenLabel(day: number): string {
   return day === 0 ? 'Today' : day < 0 ? `${Math.abs(day)} days ago` : `In ${day} days`
 }
 
-/* ---- Custom tooltip (spending only) -------------------------------------- */
-interface SpendingTooltipProps {
+const COLORS = { actual: '#f5821f', cont: '#f5a623', coach: '#16a34a', whatif: '#7c3aed' }
+
+/* ---- Custom tooltip ------------------------------------------------------ */
+interface TimelineTooltipProps {
   active?: boolean
-  payload?: Array<{ payload: SpendingPoint }>
+  payload?: Array<{ payload: TimelinePoint }>
+  whatifLabel: string | null
 }
 
-function SpendingTooltip({ active, payload }: SpendingTooltipProps) {
+function TimelineTooltip({ active, payload, whatifLabel }: TimelineTooltipProps) {
   if (!active || !payload || payload.length === 0) return null
-  const point = payload[0].payload
-
-  return (
-    <div className="min-w-[190px] rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-xl backdrop-blur-xl">
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-          {whenLabel(point.day)}
+  const p = payload[0].payload
+  const row = (label: string, color: string, v: number | null, band?: [number, number] | null) =>
+    v == null ? null : (
+      <div className="mt-1.5 flex items-baseline justify-between gap-4">
+        <span className="flex items-center gap-2 text-xs font-medium text-slate-500">
+          <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+          {label}
         </span>
-        {point.day > 0 && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
-            Projected
-          </span>
-        )}
+        <span className="text-right">
+          <span className="text-sm font-extrabold text-slate-800">{formatUSD(v)}</span>
+          {band && <span className="block text-[10px] text-slate-400">{formatUSD(band[0])} – {formatUSD(band[1])}</span>}
+        </span>
       </div>
-      <p className="mt-1.5 text-sm font-medium text-slate-500">Total Spending</p>
-      <p className="text-xl font-extrabold text-slate-800">{formatUSD(point.total)}</p>
+    )
+  return (
+    <div className="min-w-[230px] rounded-2xl border border-white/70 bg-white/90 px-4 py-3 shadow-xl backdrop-blur-xl">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{whenLabel(p.day)}</span>
+        <span className="text-[11px] text-slate-400">{new Date(`${p.date}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+      </div>
+      {row('Actual', COLORS.actual, p.actual)}
+      {p.day > 0 && row('If nothing changes', COLORS.cont, p.continueMid, p.continueBand)}
+      {p.day > 0 && row('Following the coach', COLORS.coach, p.coachMid, p.coachBand)}
+      {p.day > 0 && whatifLabel && row(whatifLabel, COLORS.whatif, p.whatifMid)}
     </div>
   )
 }
@@ -85,44 +98,37 @@ function StatCard({ label, value, hint, dot }: StatCardProps) {
   )
 }
 
-/* ---- Spending chart ------------------------------------------------------ */
-interface SpendingChartProps {
-  data: SpendingPoint[]
-  onActiveChange: (point: SpendingPoint | null) => void
+/* ---- 360° chart --------------------------------------------------------- */
+interface TimelineChartProps {
+  data: TimelinePoint[]
+  span: number
+  whatifLabel: string | null
+  onActiveChange: (point: TimelinePoint | null) => void
 }
 
-const SpendingChart = memo(function SpendingChart({
-  data,
-  onActiveChange,
-}: SpendingChartProps) {
-  const current = data.find((d) => d.day === 0)
+const TimelineChart = memo(function TimelineChart({ data, span, whatifLabel, onActiveChange }: TimelineChartProps) {
+  const shown = useMemo(() => data.filter((d) => Math.abs(d.day) <= span), [data, span])
+  const current = shown.find((d) => d.day === 0)
+  const ticks = [-span, -span / 2, 0, span / 2, span]
 
   return (
     <div className="h-[340px] w-full sm:h-[380px]">
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart
-          data={data}
+        <ComposedChart
+          data={shown}
           margin={{ top: 12, right: 12, left: 0, bottom: 4 }}
           onMouseMove={(state) => {
             // Recharts 3 reports activeTooltipIndex as a string | number, so coerce it.
             const raw = state.activeTooltipIndex
             const idx = raw == null ? NaN : Number(raw)
-            onActiveChange(
-              Number.isInteger(idx) && idx >= 0 && idx < data.length
-                ? data[idx]
-                : null,
-            )
+            onActiveChange(Number.isInteger(idx) && idx >= 0 && idx < shown.length ? shown[idx] : null)
           }}
           onMouseLeave={() => onActiveChange(null)}
         >
           <defs>
             <linearGradient id="fillActual" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f5821f" stopOpacity={0.35} />
-              <stop offset="90%" stopColor="#f5821f" stopOpacity={0} />
-            </linearGradient>
-            <linearGradient id="fillProjected" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#f5a623" stopOpacity={0.16} />
-              <stop offset="90%" stopColor="#f5a623" stopOpacity={0} />
+              <stop offset="0%" stopColor={COLORS.actual} stopOpacity={0.3} />
+              <stop offset="90%" stopColor={COLORS.actual} stopOpacity={0} />
             </linearGradient>
           </defs>
 
@@ -130,11 +136,9 @@ const SpendingChart = memo(function SpendingChart({
           <XAxis
             dataKey="day"
             type="number"
-            domain={[-180, 180]}
-            ticks={[-180, -90, 0, 90, 180]}
-            tickFormatter={(d: number) =>
-              d === 0 ? 'Current' : d < 0 ? `${d} Days` : `+${d} Days`
-            }
+            domain={[-span, span]}
+            ticks={ticks}
+            tickFormatter={(d: number) => (d === 0 ? 'Today' : d < 0 ? `${d} days` : `+${d} days`)}
             tick={{ fill: '#94a3b8', fontSize: 12, fontWeight: 600 }}
             axisLine={false}
             tickLine={false}
@@ -146,104 +150,76 @@ const SpendingChart = memo(function SpendingChart({
             axisLine={false}
             tickLine={false}
             width={52}
+            domain={['auto', 'auto']}
           />
           <Tooltip
-            cursor={{ stroke: '#f5821f', strokeWidth: 1.5, strokeDasharray: '4 4' }}
-            content={(<SpendingTooltip />) as ReactElement}
+            cursor={{ stroke: COLORS.actual, strokeWidth: 1.5, strokeDasharray: '4 4' }}
+            content={(<TimelineTooltip whatifLabel={whatifLabel} />) as ReactElement}
           />
 
+          {/* likely ranges (5th–95th percentile of the simulated futures) */}
+          <Area type="monotone" dataKey="continueBand" stroke="none" fill={COLORS.cont} fillOpacity={0.15} isAnimationActive={false} activeDot={false} />
+          <Area type="monotone" dataKey="coachBand" stroke="none" fill={COLORS.coach} fillOpacity={0.12} isAnimationActive={false} activeDot={false} />
           <Area
             type="monotone"
             dataKey="actual"
-            stroke="#f5821f"
+            stroke={COLORS.actual}
             strokeWidth={3}
             fill="url(#fillActual)"
             dot={false}
-            activeDot={{ r: 5, fill: '#f5821f', stroke: '#ffffff', strokeWidth: 2 }}
+            activeDot={{ r: 5, fill: COLORS.actual, stroke: '#ffffff', strokeWidth: 2 }}
           />
-          <Area
-            type="monotone"
-            dataKey="projected"
-            stroke="#f5a623"
-            strokeWidth={2.5}
-            strokeDasharray="7 6"
-            fill="url(#fillProjected)"
-            dot={false}
-            activeDot={{ r: 5, fill: '#f5a623', stroke: '#ffffff', strokeWidth: 2 }}
-          />
+          <Line type="monotone" dataKey="continueMid" stroke={COLORS.cont} strokeWidth={2.5} strokeDasharray="7 6" dot={false} activeDot={{ r: 4 }} />
+          <Line type="monotone" dataKey="coachMid" stroke={COLORS.coach} strokeWidth={2.5} dot={false} activeDot={{ r: 4 }} />
+          {whatifLabel && <Line type="monotone" dataKey="whatifMid" stroke={COLORS.whatif} strokeWidth={2} strokeDasharray="3 4" dot={false} activeDot={{ r: 4 }} />}
 
-          <ReferenceLine x={0} stroke="#f5821f" strokeWidth={1.5} strokeDasharray="5 5" />
-          {current && (
-            <ReferenceDot
-              x={0}
-              y={current.total}
-              r={7}
-              fill="#f5821f"
-              stroke="#ffffff"
-              strokeWidth={3}
-            />
+          <ReferenceLine x={0} stroke={COLORS.actual} strokeWidth={1.5} strokeDasharray="5 5" />
+          {current?.actual != null && (
+            <ReferenceDot x={0} y={current.actual} r={7} fill={COLORS.actual} stroke="#ffffff" strokeWidth={3} />
           )}
-        </AreaChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   )
 })
 
-/* ---- Health metric bar (reacts to chart hover) --------------------------- */
-interface HealthMetricBarProps {
-  value: number
+/* ---- Cash cushion meter (reacts to chart hover) ------------------------- */
+interface CushionBarProps {
+  months: number | null
   context: string
   live: boolean
 }
 
-function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
+const CUSHION_FULL = 6 // months of bills that fill the bar
+
+function CushionBar({ months, context, live }: CushionBarProps) {
+  const value = months == null ? 0 : Math.max(0, Math.min(100, Math.round((100 * months) / CUSHION_FULL)))
   const [width, setWidth] = useState(0)
+  useEffect(() => { setWidth(value) }, [value])
 
-  useEffect(() => {
-    setWidth(value)
-  }, [value])
-
-  const status =
-    value >= 80
-      ? 'Excellent'
-      : value >= 65
-        ? 'Healthy'
-        : value >= 50
-          ? 'Fair'
-          : value >= 35
-            ? 'At risk'
-            : 'Critical'
-
-  const statusText =
-    value >= 65 ? 'text-emerald-600' : value >= 50 ? 'text-amber-600' : 'text-rose-600'
+  const m = months ?? 0
+  const status = m >= 6 ? 'Strong' : m >= 3 ? 'Healthy' : m >= 1 ? 'Thin' : 'Critical'
+  const statusText = m >= 3 ? 'text-emerald-600' : m >= 1 ? 'text-amber-600' : 'text-rose-600'
 
   return (
     <div>
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
-              Financial Health Metric
-            </h3>
-            <span
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
-                live ? 'bg-brand text-white' : 'bg-brand-tint text-brand-dark'
-              }`}
-            >
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">Cash cushion</h3>
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${live ? 'bg-brand text-white' : 'bg-brand-tint text-brand-dark'}`}>
               {context}
             </span>
           </div>
           <p className="mt-1 flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold tabular-nums text-slate-800">
-              {value}%
-            </span>
+            <span className="text-4xl font-extrabold tabular-nums text-slate-800">{months == null ? '—' : months.toFixed(1)}</span>
+            <span className="text-sm font-semibold text-slate-500">months of bills</span>
             <span className={`text-sm font-bold ${statusText}`}>{status}</span>
           </p>
         </div>
         <p className="max-w-xs text-xs leading-relaxed text-slate-400">
-          A blended score from your spending, income and cash-flow buffers.
-          <span className="font-semibold text-slate-500"> Hover the chart</span> to see
-          it change over time.
+          Cash minus high-interest debt, divided by your monthly bills. Three months is the usual guideline.
+          <span className="font-semibold text-slate-500"> Hover the chart</span> to see it on any day.
         </p>
       </div>
 
@@ -254,55 +230,52 @@ function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
             style={{ width: `${width}%` }}
           />
         </div>
-
-        {/* Knob */}
-        <div
-          className="pointer-events-none absolute top-2 transition-[left] duration-300 ease-out"
-          style={{ left: `${width}%`, transform: 'translate(-50%, -50%)' }}
-        >
+        <div className="pointer-events-none absolute top-2 transition-[left] duration-300 ease-out" style={{ left: `${width}%`, transform: 'translate(-50%, -50%)' }}>
           <span className="block h-6 w-6 rounded-full border-4 border-white bg-brand shadow-md" />
         </div>
-
-        {/* Floating value bubble */}
-        <div
-          className="pointer-events-none absolute -top-8 transition-[left] duration-300 ease-out"
-          style={{ left: `${width}%`, transform: 'translateX(-50%)' }}
-        >
+        <div className="pointer-events-none absolute -top-8 transition-[left] duration-300 ease-out" style={{ left: `${width}%`, transform: 'translateX(-50%)' }}>
           <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-bold tabular-nums text-white shadow-lg">
-            {value}%
+            {months == null ? '—' : `${months.toFixed(1)} mo`}
           </span>
         </div>
       </div>
 
       <div className="mt-3 flex justify-between text-[11px] font-semibold text-slate-400">
-        <span>0</span>
-        <span>25</span>
-        <span>50</span>
-        <span>75</span>
-        <span>100</span>
+        <span>0</span><span>1.5</span><span>3 (guideline)</span><span>4.5</span><span>6+ months</span>
       </div>
     </div>
   )
 }
 
 /* ---- Page ---------------------------------------------------------------- */
+const SPANS = [
+  { label: '360 days', span: 180 },
+  { label: '90 days', span: 45 },
+  { label: '30 days', span: 15 },
+]
+
 export default function LifeCycle() {
-  const data = useMemo(() => generateSpendingData(), [])
-  const currentPoint = useMemo(
-    () => data.find((d) => d.day === 0) ?? data[Math.floor(data.length / 2)],
-    [data],
+  return (
+    <LiveDataProvider>
+      <LifeCycleInner />
+    </LiveDataProvider>
   )
+}
 
-  const [activePoint, setActivePoint] = useState<SpendingPoint | null>(null)
-  const handleActiveChange = useCallback(
-    (point: SpendingPoint | null) => setActivePoint(point),
-    [],
-  )
+function LifeCycleInner() {
+  const { data, customerId, error, loading } = useLiveData()
+  const tl = useMemo(() => (data ? timelineFor(data) : null), [data])
+  const points = tl?.points ?? []
+  const [span, setSpan] = useState(180)
+  const [activePoint, setActivePoint] = useState<TimelinePoint | null>(null)
+  const handleActiveChange = useCallback((point: TimelinePoint | null) => setActivePoint(point), [])
 
-  const shown = activePoint ?? currentPoint
-  const currentTotal = currentPoint.total
-  const projectedTotal = data[data.length - 1].total
-  const monthlyAvg = Math.round(currentTotal / 6)
+  const today = points.find((d) => d.day === 0) ?? null
+  const start = points.find((d) => d.day === -180) ?? null
+  const end = points.find((d) => d.day === 180) ?? null
+  const shown = activePoint ?? today
+  const change = today?.actual != null && start?.actual != null ? today.actual - start.actual : null
+  const gain = end?.coachMid != null && end?.continueMid != null ? end.coachMid - end.continueMid : null
 
   return (
     <div className="relative min-h-screen overflow-hidden bg-[#fff8f1] text-slate-800">
@@ -316,41 +289,49 @@ export default function LifeCycle() {
       <AppHeader current="health" />
 
       <main className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-8">
-        {/* Page title + range selector */}
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-dark">
-              Life Cycle
-            </p>
+            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-dark">Life Cycle · {customerId}</p>
             <h1 className="mt-1.5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Your spending, past &amp; future
+              Your money, 180 days back &amp; 180 ahead
             </h1>
           </div>
-          <div className="flex items-center gap-1 rounded-full border border-white/60 bg-white/60 p-1 text-sm shadow-sm backdrop-blur-xl">
-            <span className="rounded-full bg-brand px-3 py-1 font-semibold text-white shadow-sm">
-              360 days
-            </span>
-            <span className="px-3 py-1 font-medium text-slate-400">90 days</span>
-            <span className="px-3 py-1 font-medium text-slate-400">30 days</span>
+          <div className="flex items-center gap-1 rounded-full border border-white/60 bg-white/60 p-1 text-sm shadow-sm backdrop-blur-xl" role="group" aria-label="Time window">
+            {SPANS.map((s) => (
+              <button
+                key={s.span}
+                type="button"
+                aria-pressed={span === s.span}
+                onClick={() => setSpan(s.span)}
+                className={span === s.span ? 'rounded-full bg-brand px-3 py-1 font-semibold text-white shadow-sm' : 'rounded-full px-3 py-1 font-medium text-slate-400 hover:text-slate-600'}
+              >
+                {s.label}
+              </button>
+            ))}
           </div>
         </div>
 
+        {error && <p className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">Can&rsquo;t load live data: {error}</p>}
+        {!error && data && points.length === 0 && (
+          <p className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            No forecast for {customerId} yet. Run <code>run_forecast</code> for this customer (the load script does it for C006, C002 and C027).
+          </p>
+        )}
+
         {/* KPI row */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <StatCard label="Spent to date" value={formatUSD(currentTotal)} dot="bg-brand" />
+          <StatCard label="Net cash today" value={today?.actual != null ? formatUSD(today.actual) : loading ? '…' : '—'} hint="Cash minus high-interest debt" dot="bg-brand" />
+          <StatCard label="Past 180 days" value={change != null ? `${change >= 0 ? '+' : ''}${formatUSD(change)}` : '—'} hint="Change in net cash" dot="bg-amber-400" />
           <StatCard
-            label="Monthly average"
-            value={formatUSD(monthlyAvg)}
-            dot="bg-amber-400"
-          />
-          <StatCard
-            label="Projected +180d"
-            value={formatUSD(projectedTotal)}
+            label="In 180 days, as is"
+            value={end?.continueMid != null ? formatUSD(end.continueMid) : '—'}
+            hint={end?.continueBand ? `Likely ${formatUSD(end.continueBand[0])} – ${formatUSD(end.continueBand[1])}` : undefined}
             dot="bg-sky-400"
           />
           <StatCard
-            label="Health score"
-            value={`${shown.health}%`}
+            label="With the coach"
+            value={end?.coachMid != null ? formatUSD(end.coachMid) : '—'}
+            hint={gain != null ? `${gain >= 0 ? '+' : ''}${formatUSD(gain)} vs. as is` : undefined}
             dot="bg-emerald-500"
           />
         </div>
@@ -359,32 +340,23 @@ export default function LifeCycle() {
         <section className={`${glass} mt-6 p-5 sm:p-6`}>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Total Spending over time</h2>
-              <p className="text-sm text-slate-500">
-                Cumulative spend with a 180-day projection.
-              </p>
+              <h2 className="text-lg font-bold text-slate-900">Net cash over time</h2>
+              <p className="text-sm text-slate-500">Actual history, then thousands of simulated futures. Shaded areas are the likely range.</p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
-              <span className="flex items-center gap-2">
-                <span className="h-1 w-6 rounded-full bg-brand" />
-                Actual
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="h-0 w-6 border-t-2 border-dashed border-amber-400" />
-                Projected
-              </span>
+            <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-500">
+              <span className="flex items-center gap-2"><span className="h-1 w-6 rounded-full" style={{ background: COLORS.actual }} />Actual</span>
+              <span className="flex items-center gap-2"><span className="h-0 w-6 border-t-2 border-dashed" style={{ borderColor: COLORS.cont }} />If nothing changes</span>
+              <span className="flex items-center gap-2"><span className="h-1 w-6 rounded-full" style={{ background: COLORS.coach }} />Following the coach</span>
+              {tl?.whatifLabel && <span className="flex items-center gap-2"><span className="h-0 w-6 border-t-2 border-dotted" style={{ borderColor: COLORS.whatif }} />{tl.whatifLabel}</span>}
             </div>
           </div>
-          <SpendingChart data={data} onActiveChange={handleActiveChange} />
+          <TimelineChart data={points} span={span} whatifLabel={tl?.whatifLabel ?? null} onActiveChange={handleActiveChange} />
+          <p className="mt-3 text-[11px] text-slate-400">Forecasts are ranges, not promises. Educational tool using synthetic data — not financial advice.</p>
         </section>
 
-        {/* Health metric — reacts to chart hover */}
+        {/* Cushion meter — reacts to chart hover */}
         <section className={`${glass} mt-6 p-5 sm:p-7`}>
-          <HealthMetricBar
-            value={shown.health}
-            context={whenLabel(shown.day)}
-            live={activePoint !== null}
-          />
+          <CushionBar months={shown?.cushion ?? null} context={shown ? whenLabel(shown.day) : 'Today'} live={activePoint !== null} />
         </section>
       </main>
     </div>

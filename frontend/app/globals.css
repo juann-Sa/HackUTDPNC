@@ -128,3 +128,43 @@ a {
 a:hover {
   text-decoration: underline;
 }
+
+/* coach actions + goals */
+.coach-actions, .goals-panel { padding-bottom: 22px; }
+.coach-actions .panel-heading, .goals-panel .panel-heading { padding-bottom: 14px; }
+.actions-empty { margin: 4px 25px; font-size: 13px; color: #737373; list-style: none; }
+.action-list, .goal-list { list-style: none; margin: 0 25px; padding: 0; display: grid; gap: 12px; }
+.action-card, .goal-card { border: 1px solid #eee; border-radius: 12px; padding: 14px 16px; background: #fcfcfc; }
+.action-card strong { font-size: 15px; font-weight: 600; }
+.action-card p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: #525252; }
+.action-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { font-size: 11px; font-weight: 600; padding: 3px 9px; border-radius: 999px; background: #f4f4f5; color: #3f3f46; }
+.chip-good { background: #e8f8ee; color: #15803d; }
+.chip-warn { background: #fff4e0; color: #b45309; }
+.goal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.goal-head strong { display: block; font-size: 15px; font-weight: 600; }
+.goal-head span { display: block; margin-top: 2px; font-size: 12px; color: #737373; }
+.goal-meter { height: 8px; margin-top: 12px; border-radius: 999px; background: #f1f1f1; overflow: hidden; }
+.goal-meter span { display: block; height: 100%; border-radius: 999px; background: #e5484d; }
+.goal-meter span[data-level="ok"] { background: #f5a623; }
+.goal-meter span[data-level="good"] { background: #22c55e; }
+.goal-line, .goal-tip { margin: 8px 0 0; font-size: 13px; color: #404040; line-height: 1.5; }
+.goal-tip { color: #525252; }
+.goal-form { display: grid; grid-template-columns: 1.4fr 1fr .8fr 1fr auto; gap: 8px; margin: 14px 25px 0; }
+.goal-form input, .goal-form select { min-width: 0; font: inherit; font-size: 13px; padding: 9px 10px; border: 1px solid #e0e0e0; border-radius: 8px; background: #fff; }
+.goal-form button { font: inherit; font-size: 13px; font-weight: 500; padding: 0 14px; border: 0; border-radius: 8px; background: #f58025; color: #fff; }
+.goal-form button:disabled { opacity: .55; }
+.goal-note { margin: 8px 25px 0; font-size: 11px; color: #8a8a8a; }
+@media (max-width: 1100px) { .goal-form { grid-template-columns: 1fr 1fr; } .goal-form button { padding: 10px; } }
+
+/* .pnc-dash resets p margins (higher specificity); restore spacing for the live-data panels */
+.pnc-dash .as-of { margin: 4px 0 0; }
+.pnc-dash .coach-sub { margin: 6px 0 0; }
+.pnc-dash .coach-read { margin: 8px 0 0; }
+.pnc-dash .coach-text { margin: 10px 0; }
+.pnc-dash .coach-status, .pnc-dash .coach-error { margin: 16px 25px 0; }
+.pnc-dash .payments-note { margin: 8px 25px 10px; }
+.pnc-dash .actions-empty { margin: 4px 25px; }
+.pnc-dash .action-card p { margin: 6px 0 0; }
+.pnc-dash .goal-line, .pnc-dash .goal-tip { margin: 8px 0 0; }
+.pnc-dash .goal-note { margin: 8px 25px 0; }
