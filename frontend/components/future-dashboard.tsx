@@ -400,21 +400,24 @@ function FutureDashboardContent() {
   );
   const coachByDay = useMemo(() => new Map(coachForecast.map((point) => [point.day_offset, point])), [coachForecast]);
   const userByDay = useMemo(() => new Map(userForecast.map((point) => [point.day_offset, point])), [userForecast]);
+  const activeScenarioForecast = userForecast.length > 0 ? userByDay : coachByDay;
+  const activeScenarioName = userForecast.length > 0
+    ? "Your what-if"
+    : coachForecast.length > 0
+      ? "AI coach scenario"
+      : null;
+  const activeScenarioColor = userForecast.length > 0 ? "#3976b9" : "#f58025";
   const chartPoints = useMemo(
     () =>
       baselinePoints.map((point) => ({
         day: point.day_offset,
         date: point.date,
-        actual: point.day_offset === 0 && point.actual_net_cash_cents != null ? point.actual_net_cash_cents / 100 : null,
         baseline: point.continue_mid_cents == null ? null : point.continue_mid_cents / 100,
-        coachScenario: (coachByDay.get(point.day_offset)?.mid_cents ?? null) == null
+        comparison: (activeScenarioForecast.get(point.day_offset)?.mid_cents ?? null) == null
           ? null
-          : Number(coachByDay.get(point.day_offset)?.mid_cents) / 100,
-        userScenario: (userByDay.get(point.day_offset)?.mid_cents ?? null) == null
-          ? null
-          : Number(userByDay.get(point.day_offset)?.mid_cents) / 100,
+          : Number(activeScenarioForecast.get(point.day_offset)?.mid_cents) / 100,
       })),
-    [baselinePoints, coachByDay, userByDay],
+    [activeScenarioForecast, baselinePoints],
   );
   const formatDate = (iso: string) =>
     new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -547,9 +550,10 @@ function FutureDashboardContent() {
                 </div>
               </div>
               <div className="future-legend" aria-label="Forecast lines">
-                <span><i className="baseline-key" />Actual / if nothing changes</span>
-                {coachForecast.length > 0 && <span><i className="coach-key" />AI coach suggested sliders</span>}
-                {userForecast.length > 0 && <span><i className="user-key" />Your chosen sliders</span>}
+                <span><i className="baseline-key" />Your current path</span>
+                {activeScenarioName && (
+                  <span><i className={userForecast.length > 0 ? "user-key" : "coach-key"} />{activeScenarioName}</span>
+                )}
               </div>
 
               {loading ? (
@@ -559,7 +563,7 @@ function FutureDashboardContent() {
                   A 180-day forecast isn’t available for this customer yet.
                 </div>
               ) : (
-                <div className="future-chart" role="img" aria-label="180-day net cash forecast, comparing current financial habits with AI suggested and user-selected scenarios">
+                <div className="future-chart" role="img" aria-label={`180-day net cash forecast showing your current path${activeScenarioName ? ` and ${activeScenarioName}` : ""}`}>
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={chartPoints} margin={{ top: 16, right: 12, left: 8, bottom: 8 }}>
                       <CartesianGrid stroke="#eeeeee" vertical={false} strokeDasharray="3 5" />
@@ -595,7 +599,7 @@ function FutureDashboardContent() {
                         contentStyle={{ border: "1px solid #e8e8e8", borderRadius: 10, fontSize: 12 }}
                       />
                       <Line
-                        name="Actual / if nothing changes"
+                        name="Your current path"
                         type="monotone"
                         dataKey="baseline"
                         stroke="#737373"
@@ -604,40 +608,18 @@ function FutureDashboardContent() {
                         activeDot={{ r: 4, stroke: "#fff", strokeWidth: 2 }}
                         connectNulls
                       />
-                      {coachForecast.length > 0 && (
+                      {activeScenarioName && (
                         <Line
-                          name="AI coach suggested sliders"
+                          name={activeScenarioName}
                           type="monotone"
-                          dataKey="coachScenario"
-                          stroke="#f58025"
+                          dataKey="comparison"
+                          stroke={activeScenarioColor}
                           strokeWidth={2.5}
                           dot={false}
                           activeDot={{ r: 4, stroke: "#fff", strokeWidth: 2 }}
                           connectNulls
                         />
                       )}
-                      {userForecast.length > 0 && (
-                        <Line
-                          name="Your chosen sliders"
-                          type="monotone"
-                          dataKey="userScenario"
-                          stroke="#3976b9"
-                          strokeWidth={2.5}
-                          dot={false}
-                          activeDot={{ r: 4, stroke: "#fff", strokeWidth: 2 }}
-                          connectNulls
-                        />
-                      )}
-                      <Line
-                        name="Today"
-                        type="monotone"
-                        dataKey="actual"
-                        stroke="#171717"
-                        strokeWidth={0}
-                        dot={{ r: 3, fill: "#171717", stroke: "#fff", strokeWidth: 2 }}
-                        activeDot={{ r: 4, fill: "#171717" }}
-                        connectNulls={false}
-                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
