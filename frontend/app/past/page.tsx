@@ -283,7 +283,7 @@ function LifeCycleInner() {
       <main className="life-cycle-main">
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1>Past</h1>
+            <h1>180&deg; Past</h1>
           </div>
           <div className="health-range" role="group" aria-label="Time window">
             {SPANS.map((s) => (

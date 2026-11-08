@@ -9,3 +9,19 @@
 @media(max-width:600px){.pnc-dash .topbar nav{gap:14px}.pnc-dash nav>a{font-size:12px}.pnc-dash .account-button>span:not(.avatar){display:none}.pnc-dash .account-button>svg{display:none}}
 
 .pnc-dash .payments-panel .month-nav>span{font-size:14px}
+
+.pnc-dash .account-tab-wrap{background:#fff}
+.pnc-dash .account-tab-wrap>button:first-child,.pnc-dash .account-tab-remove{color:#171717}
+.pnc-dash .account-tab-wrap:not(.is-active):hover{border-color:var(--border)}
+.pnc-dash .account-tab-wrap:not(.is-active)>button:first-child:hover{color:#171717}
+.pnc-dash .account-tab-wrap.is-active{background:#fff;border-color:var(--orange)}
+.pnc-dash .account-tab-wrap.is-active>button:first-child,.pnc-dash .account-tab-wrap.is-active .account-tab-remove{color:var(--orange)}
+
+.pnc-dash .topbar{height:76px}
+@media(max-width:760px){.pnc-dash .topbar{height:64px}}
+
+.pnc-dash .page-heading{margin-bottom:20px}
+
+.pnc-dash .payments-panel .month-nav .icon-button{transition:background-color 160ms,color 160ms,box-shadow 160ms}
+.pnc-dash .payments-panel .month-nav .icon-button:hover{background:#fff0e5;color:#ae4d08;box-shadow:0 1px 4px rgba(23,23,23,.08)}
+.pnc-dash .payments-panel .month-nav .icon-button:active{background:#ffe1ca}
