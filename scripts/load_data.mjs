@@ -114,6 +114,14 @@ batched('load_ledger', csv('transactions.csv').map(r => ({
   flow_class: r.flow_class,
   transfer_id: r.transfer_id,
 })), 600);
+// synthetic Toyota vehicles for the Car loans tab (analytics/model/make_vehicles.py)
+const vehicles = csv('vehicles.csv').map(r => ({
+  vehicle_id: r.vehicle_id, customer_id: r.customer_id, account_id: r.account_id, make: r.make, model: r.model,
+  model_year: Number(r.model_year), mileage: Number(r.mileage), list_price_cents: cents(r.list_price),
+  trade_in_estimate_cents: cents(r.trade_in_estimate), new_model_year: Number(r.new_model_year), new_price_cents: cents(r.new_price),
+  refi_apr_pct: Number(r.refi_apr_pct), new_car_apr_pct: Number(r.new_car_apr_pct), new_car_term_months: Number(r.new_car_term_months),
+}));
+batched('load_vehicles', vehicles, 200);
 customers.forEach((c, i) => {
   call('recompute_customer', c.customer_id);
   call('generate_180_day_projection', c.customer_id);
@@ -123,6 +131,10 @@ process.stdout.write('\n');
 for (const cid of FORECAST.filter(c => !ONLY || ONLY.has(c))) {
   call('run_forecast', cid, false);
   console.log(`  run_forecast: ${cid}`);
+  if (vehicles.some(v => v.customer_id === cid)) {
+    call('run_car_options', cid);
+    console.log(`  run_car_options: ${cid}`);
+  }
 }
 const btList = BACKTEST === 'none' ? [] : BACKTEST === 'all' ? customers.map(c => c.customer_id) : BACKTEST.split(',');
 btList.forEach((cid, i) => {

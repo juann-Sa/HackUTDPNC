@@ -68,6 +68,18 @@ export interface Scenario {
   /** A financed purchase (car, home...): down payment leaves cash on dayIndex, then a fixed
    *  amortized payment every month on that day of the month until the loan is paid off. */
   newLoan?: NewLoan;
+  /** Changes to existing loans (car-loan options): pay extra each month, refinance, pay off with cash,
+   *  or close it without cash (a trade-in covers the balance). Applied on dayIndex. */
+  loanChanges?: LoanChange[];
+}
+
+export interface LoanChange {
+  accountId: string;
+  dayIndex: number;
+  kind: 'extra' | 'refi' | 'payoff_cash' | 'close';
+  extraCents?: number; // 'extra': added to the monthly payment from dayIndex on
+  aprPct?: number; // 'refi': new rate
+  paymentCents?: number; // 'refi': new monthly payment
 }
 
 export interface NewLoan {
@@ -172,6 +184,9 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
   let cardBal = s.card?.balance ?? 0;
   const cardApr = (s.card?.aprPct ?? 0) + (sc.cardAprBumpPct ?? 0);
   const loanBal = s.loans.map(l => l.balance);
+  const loanApr = s.loans.map(l => l.aprPct);
+  const loanPay = s.loans.map(l => l.payment);
+  const changes = (sc.loanChanges ?? []).map(c => ({ ...c, i: s.loans.findIndex(l => l.accountId === c.accountId) })).filter(c => c.i >= 0);
   const lockedBal = s.locked.map(l => l.balance);
   const nl = sc.newLoan;
   let nlBal = 0;
@@ -278,11 +293,19 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
       unpaid = 0;
       unpaidDev.fill(0);
     }
+    // changes to existing loans (car-loan options)
+    for (const c of changes) {
+      if (c.dayIndex !== k) continue;
+      if (c.kind === 'extra') loanPay[c.i] += c.extraCents ?? 0;
+      else if (c.kind === 'refi') { loanApr[c.i] = c.aprPct ?? loanApr[c.i]; loanPay[c.i] = c.paymentCents ?? loanPay[c.i]; }
+      else if (c.kind === 'payoff_cash') { x -= Math.max(loanBal[c.i], 0); loanBal[c.i] = 0; }
+      else if (c.kind === 'close') loanBal[c.i] = 0;
+    }
     // loans
     s.loans.forEach((l, i) => {
       if (dom !== Math.min(l.day, lastDom) || loanBal[i] <= 0) return;
-      const interest = (loanBal[i] * l.aprPct) / 1200;
-      const pay = Math.min(l.payment, loanBal[i] + interest + l.feePerMonth);
+      const interest = (loanBal[i] * loanApr[i]) / 1200;
+      const pay = Math.min(loanPay[i], loanBal[i] + interest + l.feePerMonth);
       loanBal[i] += interest + l.feePerMonth - pay;
       x -= pay;
     });

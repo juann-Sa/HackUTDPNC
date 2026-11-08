@@ -86,6 +86,14 @@ function loadedHarness() {
     m.load_accounts(ctx, { rows: accounts });
     m.load_ledger(ctx, { rows: ledger });
     m.load_statements(ctx, { rows: statements });
+    m.load_vehicles(ctx, {
+      rows: csv('vehicles.csv').map(r => ({
+        vehicle_id: r.vehicle_id, customer_id: r.customer_id, account_id: r.account_id, make: r.make, model: r.model,
+        model_year: Number(r.model_year), mileage: Number(r.mileage), list_price_cents: cents(r.list_price),
+        trade_in_estimate_cents: cents(r.trade_in_estimate), new_model_year: Number(r.new_model_year), new_price_cents: cents(r.new_price),
+        refi_apr_pct: Number(r.refi_apr_pct), new_car_apr_pct: Number(r.new_car_apr_pct), new_car_term_months: Number(r.new_car_term_months),
+      })),
+    });
   });
   test.withReducerTx(owner, ctx => m.recompute_all(ctx, {}));
   return { test, n: customers.length, ledgerRows: ledger.length };
@@ -627,4 +635,47 @@ describe('data basis and gaps', () => {
     expect(text).toMatch(/Linked outside accounts count toward net worth but are left out of the forecast/);
     expect(text).not.toMatch(/no outside accounts are linked/);
   }, 60_000);
+});
+
+describe('car-loan options (Toyota)', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_car_options(ctx, { customer_id: 'C006' }));
+  const opts = () => [...test.db.carOption.customer_id.filter('C006')].sort((a, b) => a.rank - b.rank);
+  it('writes keep / extra / refinance / payoff / trade-in for C006 with consistent loan math', () => {
+    const o = Object.fromEntries(opts().map(r => [r.kind, r]));
+    expect(Object.keys(o)).toEqual(['keep', 'extra', 'refinance', 'payoff', 'trade_in']);
+    // the payment the ledger shows C006 actually making (the forecast uses the same number)
+    expect(o.keep.monthly_payment_cents).toBeGreaterThan(10000);
+    expect(o.extra.monthly_payment_cents).toBe(o.keep.monthly_payment_cents + 10000);
+    expect(o.extra.interest_saved_cents).toBeGreaterThan(0);
+    expect(o.refinance.interest_saved_cents).toBeGreaterThan(0); // 5.49% beats 7.5% over the same term
+    expect(o.trade_in.end_cash_p50_cents).toBeLessThan(o.keep.end_cash_p50_cents); // a bigger payment leaves less cash
+    expect(o.payoff.upfront_cash_cents).toBe(944115); // the loan balance
+    expect(o.payoff.interest_saved_cents).toBe(o.keep.interest_cents);
+    expect(o.payoff.end_cash_p50_cents).toBeLessThan(o.keep.end_cash_p50_cents); // the cash left
+    expect(o.trade_in.interest_saved_cents).toBe(0);
+    expect(opts().filter(r => r.is_best)).toHaveLength(1);
+    expect(o.trade_in.is_best).toBe(false);
+    for (const r of opts()) expect(['comfortable', 'tight', 'risky']).toContain(r.verdict);
+  }, 60_000);
+  it('the best move saves the most interest among safe options', () => {
+    const rs = opts();
+    const best = rs.find(r => r.is_best)!;
+    const keep = rs.find(r => r.kind === 'keep')!;
+    for (const r of rs) {
+      if (r.kind === 'trade_in' || r.kind === 'keep') continue;
+      const safe = r.cushion_months >= 3 && ['comfortable', 'tight', 'risky'].indexOf(r.verdict) <= ['comfortable', 'tight', 'risky'].indexOf(keep.verdict);
+      if (safe) expect(best.interest_saved_cents).toBeGreaterThanOrEqual(r.interest_saved_cents);
+    }
+  });
+  it('the car explanation falls back to an audited template without a key', () => {
+    const text = m.narrate_car(test.procedureContext(stranger), { customer_id: 'C006' });
+    expect(text).toMatch(/2021 Toyota Corolla/);
+    expect(text).toMatch(/Best money move/);
+    writeFileSync('/tmp/st360_car.txt', JSON.stringify(opts(), (_k, v) => (typeof v === 'bigint' ? Number(v) : v), 1) + '\n' + text);
+  });
+  it('a customer without a car loan gets a clear error', () => {
+    const noCar = [...test.db.customer.iter()].map(c => c.customer_id).find(id => ![...test.db.vehicle.customer_id.filter(id)].length)!;
+    expect(() => test.withReducerTx(stranger, ctx => m.run_car_options(ctx, { customer_id: noCar }))).toThrow(/No financed vehicle/);
+  });
 });

@@ -4,7 +4,8 @@
 // frontend subscribes to (see schema.ts).
 // ─────────────────────────────────────────────────────────────────────────────
 import { t, SenderError, type InferSchema, type ProcedureCtx, type ReducerCtx } from 'spacetimedb/server';
-import spacetimedb, { account, customer, externalAccount, financialProjection, ledgerEntry, statement } from './schema';
+import spacetimedb, { account, customer, externalAccount, financialProjection, ledgerEntry, statement, vehicle } from './schema';
+import { carOptions } from './math/car';
 import { computeCarry, computeSnapshot } from './math/book';
 import { computePnl, computeSpending } from './math/pnl';
 import { computeDailyAccountTotal, computeDailyLiquid } from './math/daily';
@@ -960,6 +961,81 @@ function explainWithAudit(ctx: PCtx, facts: Fact[], ask: string, fallback: strin
   }
   return { text: fallback, source: 'template', model: 'template', rejected };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Car loans ("What's your next move?" — Toyota Financial Services challenge)
+// ─────────────────────────────────────────────────────────────────────────────
+export const load_vehicles = spacetimedb.reducer({ rows: t.array(vehicle.rowType) }, (ctx, { rows }) => {
+  assertAdmin(ctx);
+  for (const r of rows) {
+    if (ctx.db.vehicle.vehicle_id.find(r.vehicle_id)) ctx.db.vehicle.vehicle_id.update(r);
+    else ctx.db.vehicle.insert(r);
+  }
+});
+
+/** Run every car-loan option through the forecast and store them (public, like run_forecast). */
+export const run_car_options = spacetimedb.reducer({ customer_id: t.string() }, (ctx, { customer_id: cid }) => {
+  const v = [...ctx.db.vehicle.customer_id.filter(cid)][0];
+  if (!v) throw new SenderError(`No financed vehicle for ${cid}`);
+  const { schedule, snap, asOf } = scheduleFor(ctx, cid);
+  const opts = carOptions(schedule, {
+    accountId: v.account_id, model: v.model, modelYear: v.model_year, mileage: v.mileage,
+    tradeInCents: v.trade_in_estimate_cents, newModelYear: v.new_model_year, newPriceCents: v.new_price_cents,
+    refiAprPct: v.refi_apr_pct, newCarAprPct: v.new_car_apr_pct, newCarTermMonths: v.new_car_term_months,
+  }, DEFAULT_ASSUMPTIONS, seedFromString(cid), asOf, {
+    outflowCents: snap.monthly_outflow_cents, incomeCents: snap.monthly_income_cents, debtPaymentsCents: snap.monthly_debt_payments_cents,
+  });
+  for (const r of [...ctx.db.carOption.customer_id.filter(cid)]) ctx.db.carOption.option_id.delete(r.option_id);
+  opts.forEach((o, i) =>
+    ctx.db.carOption.insert({
+      option_id: `${cid}|${o.kind}`, customer_id: cid, rank: i, kind: o.kind, label: o.label, detail: o.detail,
+      monthly_payment_cents: o.monthlyPaymentCents, payment_change_cents: o.paymentChangeCents, upfront_cash_cents: o.upfrontCashCents,
+      interest_cents: o.interestCents, interest_saved_cents: o.interestSavedCents, payoff_month: o.payoffMonth,
+      p_low: o.pLow, end_cash_p50_cents: o.endCashP50Cents, cushion_months: o.cushionMonths, dti_after: o.dtiAfter,
+      verdict: o.verdict, is_best: o.isBest,
+    })
+  );
+});
+
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const monthName = (ym: string | undefined) => (ym ? `${MONTH_NAMES[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : 'not at this pace');
+
+function carFacts(ctx: Ctx, cid: string): Fact[] {
+  const v = [...ctx.db.vehicle.customer_id.filter(cid)][0];
+  const opts = [...ctx.db.carOption.customer_id.filter(cid)].sort((a, b) => a.rank - b.rank);
+  if (!v || !opts.length) return [];
+  const f: Fact[] = [{ key: 'car_vehicle', text: `Car: ${v.model_year} ${v.make} ${v.model}, about ${v.mileage.toLocaleString('en-US')} miles` }];
+  for (const o of opts) {
+    const parts = [
+      o.monthly_payment_cents > 0 ? `${usd(o.monthly_payment_cents)} a month` : 'no car payment',
+      o.upfront_cash_cents > 0 ? `${usd(o.upfront_cash_cents)} from cash today` : '',
+      o.kind === 'trade_in' ? `${usd(o.interest_cents)} interest on the new loan` : o.interest_saved_cents > 0 ? `saves ${usd(o.interest_saved_cents)} in interest` : `${usd(o.interest_cents)} interest left`,
+      `paid off ${monthName(o.payoff_month ?? undefined)}`,
+      `cash cushion about ${o.cushion_months.toFixed(1)} months of bills`,
+      `chance of running low in 180 days ${pct(o.p_low)}`,
+      `verdict ${o.verdict}`,
+    ].filter(Boolean);
+    f.push({ key: `car_${o.kind}`, text: `${o.label}: ${parts.join(', ')}` });
+  }
+  const best = opts.find(o => o.is_best);
+  if (best) f.push({ key: 'car_best', text: `Best money move by the bank's rules (most interest saved while keeping at least 3 months of bills in cash): ${best.label}` });
+  f.push({ key: 'car_assumed', text: 'The refinance and new-car rates are sample offers and the trade-in value is an estimate from age and mileage' });
+  return f;
+}
+
+/** Plain-language explanation of the car-loan options (same number audit and fallback as narrate). */
+export const narrate_car = spacetimedb.procedure({ customer_id: t.string() }, t.string(), (ctx, { customer_id: cid }) => {
+  let facts: Fact[];
+  try {
+    facts = ctx.withTx(tx => carFacts(tx, cid));
+  } catch {
+    return `No car-loan options for ${cid} yet.`;
+  }
+  if (!facts.length) return `No car-loan options for ${cid} yet. Run run_car_options first.`;
+  const ask = 'Explain the customer\'s car-loan options in four to six sentences: say which option is the best money move and why, what it costs or saves, how it affects their cash cushion, and when the trade-in makes sense or not. Mention that offers are samples and the trade-in value is an estimate.';
+  const r = explainWithAudit(ctx, facts, ask, facts.map(x => x.text).join('. ') + '.');
+  return r.text;
+});
 
 export const narrate = spacetimedb.procedure(
   { customer_id: t.string(), topic: t.string() },

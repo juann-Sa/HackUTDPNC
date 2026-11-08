@@ -454,6 +454,53 @@ export const futureScenario = table(
   }
 );
 
+// ---------- car loans (Toyota Financial Services challenge) ----------
+/** Synthetic Toyota vehicles, one per existing auto loan (data/vehicles.csv; see analytics/model/make_vehicles.py). */
+export const vehicle = table(
+  { name: 'vehicle', public: true },
+  {
+    vehicle_id: t.string().primaryKey(),
+    customer_id: t.string().index('btree'),
+    account_id: t.string(), // the auto loan this car is financed by
+    make: t.string(),
+    model: t.string(),
+    model_year: t.u32(),
+    mileage: t.u32(),
+    list_price_cents: t.f64(),
+    trade_in_estimate_cents: t.f64(), // synthetic estimate (depreciation + mileage), not a valuation
+    new_model_year: t.u32(),
+    new_price_cents: t.f64(),
+    refi_apr_pct: t.f64(), // synthetic refinance offer
+    new_car_apr_pct: t.f64(), // synthetic new-vehicle financing offer
+    new_car_term_months: t.u32(),
+  }
+);
+
+/** "What's your next move?" options for the customer's car loan, each run through the cash forecast. */
+export const carOption = table(
+  { name: 'car_option', public: true },
+  {
+    option_id: t.string().primaryKey(), // customer_id|kind
+    customer_id: t.string().index('btree'),
+    rank: t.u32(), // display order
+    kind: t.string(), // keep | extra | refinance | payoff | trade_in
+    label: t.string(),
+    detail: t.string(),
+    monthly_payment_cents: t.f64(),
+    payment_change_cents: t.f64(),
+    upfront_cash_cents: t.f64(),
+    interest_cents: t.f64(), // interest from today until this loan is paid off
+    interest_saved_cents: t.f64(), // vs keeping the loan as is
+    payoff_month: t.option(t.string()), // YYYY-MM
+    p_low: t.f64(), // chance cash drops below $500 in the next 180 days
+    end_cash_p50_cents: t.f64(),
+    cushion_months: t.f64(),
+    dti_after: t.f64(),
+    verdict: t.string(),
+    is_best: t.bool(),
+  }
+);
+
 // ---------- free-form questions answered by the engine ----------
 export const qa = table(
   { name: 'qa', public: true },
@@ -611,6 +658,8 @@ const spacetimedb = schema({
   timelineWhatif,
   futureScenario,
   qa,
+  vehicle,
+  carOption,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:
