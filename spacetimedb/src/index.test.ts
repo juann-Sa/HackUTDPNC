@@ -531,3 +531,29 @@ describe('debt payoff tables', () => {
     writeFileSync('/tmp/st360_payoff.txt', JSON.stringify({ plan, rows: rows.map(r => [r.account_type, r.payoff_month, r.coach_payoff_month, r.interest_cents, r.coach_interest_cents]) }, null, 1) + '\n' + text);
   }, 60_000);
 });
+
+describe('data basis and gaps', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+  it('states the history behind the forecast and what it leaves out', () => {
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'future' });
+    expect(text).toMatch(/Forecast built from 24 months of account history; it shows a likely range, not a promise/);
+    expect(text).toMatch(/Not included: money at other banks, because no outside accounts are linked/);
+    const overview = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'overview' });
+    expect(overview).toMatch(/24 months of account history/);
+    // a model reply quoting the history length passes the audit; a mislabeled use of the number does not
+    const facts: Fact[] = [{ key: 'data_basis', text: 'Forecast built from 24 months of account history; it shows a likely range, not a promise' }];
+    expect(auditReply('This forecast uses 24 months of history and gives a range, not a promise.', facts).ok).toBe(true);
+    writeFileSync('/tmp/st360_data_basis.txt', text);
+  }, 60_000);
+  it('says linked outside accounts are left out of the forecast once one exists', () => {
+    test.withReducerTx(stranger, ctx => m.add_external_account(ctx, {
+      customer_id: 'C006', institution: 'Chase', account_type: 'savings', nickname: '', balance_cents: 500_000,
+      apr_pct: 0, annual_yield_pct: 4, monthly_payment_cents: 0,
+    }));
+    test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'future' });
+    expect(text).toMatch(/Linked outside accounts count toward net worth but are left out of the forecast/);
+    expect(text).not.toMatch(/no outside accounts are linked/);
+  }, 60_000);
+});
