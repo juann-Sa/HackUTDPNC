@@ -532,34 +532,43 @@ export const narrate = spacetimedb.procedure(
     let source = 'template';
     let rejected = key ? '' : 'no GROQ_API_KEY set';
     if (key) {
-      try {
-        const res = ctx.http.fetch(GROQ_URL, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model,
-            temperature: 0.2,
-            max_completion_tokens: 700,
-            reasoning_effort: 'low',
-            messages: [
-              { role: 'system', content: SYSTEM_PROMPT },
-              { role: 'user', content: userPrompt(topic, facts) },
-            ],
-          }),
-        });
-        if (res.status !== 200) rejected = `groq http ${res.status}`;
-        else {
+      // Up to two attempts: if the first reply uses numbers we can't verify, say which and ask again.
+      const messages: { role: string; content: string }[] = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt(topic, facts) },
+      ];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = ctx.http.fetch(GROQ_URL, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, temperature: 0.2, max_completion_tokens: 700, reasoning_effort: 'low', messages }),
+          });
+          if (res.status !== 200) {
+            rejected = `groq http ${res.status}`;
+            break;
+          }
           const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
           const bad = unverifiedNumbers(out, facts);
           if (!out) rejected = 'empty reply';
-          else if (bad.length) rejected = `unverified numbers: ${bad.slice(0, 5).join(', ')}`;
-          else {
+          else if (bad.length) {
+            rejected = `unverified numbers (attempt ${attempt + 1}): ${bad.slice(0, 5).join(', ')}`;
+            messages.push({ role: 'assistant', content: out });
+            messages.push({
+              role: 'user',
+              content: `These numbers are not in the facts: ${bad.join(', ')}. Rewrite the answer using only numbers copied exactly from the facts.`,
+            });
+            continue;
+          } else {
             text = out;
             source = 'groq';
+            rejected = attempt ? `fixed on retry (${rejected})` : '';
           }
+          break;
+        } catch (e) {
+          rejected = `groq error: ${String(e).slice(0, 200)}`;
+          break;
         }
-      } catch (e) {
-        rejected = `groq error: ${String(e).slice(0, 200)}`;
       }
     }
     ctx.withTx(tx => {

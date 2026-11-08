@@ -26,13 +26,37 @@ export function allowedNumbers(facts: Fact[]): Set<string> {
   return s;
 }
 
-/** Returns the numbers in `text` that do not come from the facts. */
+const decimals = (s: string) => (s.includes('.') ? s.split('.')[1].length : 0);
+
+/**
+ * Is `cand` an honest rounding of `fact`? Same kind (percent or not), at most 2% apart, and equal to
+ * the fact rounded to fewer digits (e.g. $1,999 → $2,000, 1.46% → 1.5%). Invented or computed numbers fail.
+ */
+function isRounding(cand: string, fact: string): boolean {
+  const cp = cand.endsWith('%');
+  if (cp !== fact.endsWith('%')) return false;
+  const c = Number(cand.replace('%', ''));
+  const f = Number(fact.replace('%', ''));
+  if (!Number.isFinite(c) || !Number.isFinite(f) || f === 0) return false;
+  if (Math.abs(c - f) / Math.abs(f) > 0.02) return false;
+  const fd = decimals(fact.replace('%', ''));
+  for (let d = fd - 1; d >= 0; d--) if (Number(f.toFixed(d)) === c) return true;
+  for (let k = 1; k <= 6; k++) {
+    const p = 10 ** k;
+    if (Math.round(f / p) * p === c) return true;
+  }
+  return false;
+}
+
+/** Returns the numbers in `text` that are neither in the facts nor an honest rounding of a fact. */
 export function unverifiedNumbers(text: string, facts: Fact[]): string[] {
   const ok = allowedNumbers(facts);
   const bad: string[] = [];
   for (const m of text.match(NUM_RE) ?? []) {
     const n = norm(m);
-    if (!ok.has(n) && !ok.has(n.replace(/%$/, ''))) bad.push(m);
+    if (ok.has(n) || ok.has(n.replace(/%$/, ''))) continue;
+    if ([...ok].some(f => isRounding(n, f))) continue;
+    bad.push(m);
   }
   return bad;
 }

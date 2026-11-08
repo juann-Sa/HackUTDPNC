@@ -260,9 +260,13 @@ describe('AI narration guardrail', () => {
     const reply = 'Right now your net cash is $13,557. If you keep going as you are, in about 6 months it is likely around $9,239, somewhere between $8,704 and $9,774. The chance of dropping below $500 is only 0.2%.';
     expect(unverifiedNumbers(reply, facts)).toEqual([]);
   });
-  it('rejects invented, rounded or computed numbers', () => {
+  it('accepts honest rounding of a real number', () => {
+    expect(unverifiedNumbers('Net cash is roughly $13,600, about $9,200 in six months.', facts)).toEqual([]);
+    expect(unverifiedNumbers('Only about 0.2% risk.', facts)).toEqual([]);
+  });
+  it('rejects invented, computed or loosely approximated numbers', () => {
     expect(unverifiedNumbers('You will lose about $4,318 by spring.', facts)).toEqual(['$4,318']);
-    expect(unverifiedNumbers('Net cash is roughly $13,600.', facts)).toEqual(['$13,600']);
+    expect(unverifiedNumbers('Net cash is about $14,000.', facts)).toEqual(['$14,000']);
     expect(unverifiedNumbers('That is a 32% drop.', facts)).toEqual(['32%']);
   });
   it('the narrate procedure stores a verified explanation (template without an API key)', () => {
