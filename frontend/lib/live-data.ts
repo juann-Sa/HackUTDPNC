@@ -139,11 +139,10 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
     credit: {
       name: "Credit",
       primary: { label: "Card balance", value: money(cardBal) },
-      change: cardPay ? (cardPay.payoff_month ? `Paid off ${monthLabel(cardPay.payoff_month)} at today's payments` : "Not shrinking at today's payments") : undefined,
+      change: cardPay ? (cardPay.payoff_month ? `Paid off ${monthLabel(cardPay.payoff_month)} at today's payments` : undefined) : undefined,
       metrics: [
         { label: "Available credit", value: money(Math.max(0, limit - cardBal)) },
         { label: "APR", value: `${(card[0]?.apr_pct ?? 0).toFixed(1)}%` },
-        ...(cardPay ? [{ label: "Paid off with the plan", value: payoffLabel(cardPay.coach_payoff_months, cardPay.coach_payoff_month) }] : []),
       ],
       progress: snap?.utilization != null ? { label: "Credit utilization", value: Math.round(100 * snap.utilization), detail: `${pct(snap.utilization, 0)} of credit limit used` } : undefined,
     },
@@ -160,7 +159,6 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
     loan: {
       name: "Loans",
       primary: { label: "Remaining loan debt", value: money(sum(loans)) },
-      change: plan ? `Debt-free except mortgage: ${monthLabel(plan.consumer_free_month)} → ${monthLabel(plan.coach_consumer_free_month)} with the plan` : undefined,
       metrics: loans.map(l => {
         const p = payoff.get(l.account_id);
         return { label: `${prettyType(l.account_type)} · ${l.apr_pct}% APR · ${money(l.balance_cents)}`, value: p ? `Paid off ${payoffLabel(p.payoff_months, p.payoff_month)} (plan: ${payoffLabel(p.coach_payoff_months, p.coach_payoff_month)})` : money(l.monthly_payment_cents) + "/mo" };

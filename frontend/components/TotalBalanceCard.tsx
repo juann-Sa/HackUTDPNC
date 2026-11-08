@@ -35,7 +35,7 @@ export default function TotalBalanceCard() {
    {banks.map(item => <button key={item.id} aria-pressed={selected === item.id} onClick={() => setSelected(item.id)}>{item.name}</button>)}
    <button aria-label="Link an outside bank account" aria-haspopup="dialog" onClick={() => dialog.current?.showModal()}>+</button>
   </div>
-  <div className="balance-bottom bank-demo-label"><span className="mock-label">{data ? "Checking + savings" : "Loading…"}</span></div>
+  
   <dialog className="bank-connect-dialog" ref={dialog} onClick={event => { if (event.target === event.currentTarget) dialog.current?.close(); }}>
    <div className="bank-dialog-heading"><h2>Link an outside account</h2><button aria-label="Close connection dialog" onClick={() => dialog.current?.close()}>×</button></div>
    <p>Adds a sample outside account for {customerId} to the database. It counts toward net worth; forecasts leave it out unless asked.</p>

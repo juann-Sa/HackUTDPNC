@@ -7,3 +7,5 @@
 /* Shared navigation stays legible with the Coach tab on narrow screens. */
 .pnc-dash .topbar nav>a{color:#171717}
 @media(max-width:600px){.pnc-dash .topbar nav{gap:14px}.pnc-dash nav>a{font-size:12px}.pnc-dash .account-button>span:not(.avatar){display:none}.pnc-dash .account-button>svg{display:none}}
+
+.pnc-dash .payments-panel .month-nav>span{font-size:14px}

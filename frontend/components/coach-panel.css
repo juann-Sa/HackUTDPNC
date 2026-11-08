@@ -31,3 +31,14 @@
 /* disclaimer and data notes */
 .pnc-dash .coach-disclaimer { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid #f1f1f1; font-size: 11px; line-height: 1.5; color: #8a8a8a; }
 .pnc-dash .coach-data-note { margin: 12px 25px 0; font-size: 11px; color: #8a8a8a; }
+
+.pnc-dash .action-details{margin-top:10px;font-size:12px;color:#737373}
+.pnc-dash .action-details summary{cursor:pointer;width:fit-content;font-size:11px}
+.pnc-dash .action-details p{margin:10px 0;line-height:1.6}
+.pnc-dash .action-card>strong{display:block;font-size:14px;font-weight:500;line-height:1.45}
+.pnc-dash .action-card>.action-chips{margin-top:10px;gap:6px}
+.pnc-dash .goal-list:empty{display:none}
+
+.pnc-dash .coach-actions .panel-heading{padding-bottom:24px}
+.pnc-dash .page-heading:has(+ .coach-panel){margin-bottom:16px}
+.pnc-dash .page-heading + .coach-panel{margin-top:0}

@@ -41,9 +41,9 @@ export default function GoalsPanel() {
 
   return (
     <section className="panel goals-panel" aria-labelledby="goals-title">
-      <div className="panel-heading"><div><h2 id="goals-title">Savings goals</h2><p className="coach-sub">The chance you reach each goal, counting surprise bills and job-loss risk, and what it would take.</p></div></div>
+      <div className="panel-heading"><div><h2 id="goals-title">Savings goals</h2></div></div>
       <ul className="goal-list">
-        {goals.length === 0 && <li className="actions-empty">No goals yet. Add one below.</li>}
+        
         {goals.map(g => {
           const r = results.get(g.goal_id);
           const p = r?.p_success ?? 0;

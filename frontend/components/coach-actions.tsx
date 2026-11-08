@@ -5,12 +5,12 @@ import type { CoachActionRow } from "@/lib/live-data";
 const usd = (c: number) => `$${Math.round(Math.abs(c) / 100).toLocaleString("en-US")}`;
 const pct = (x: number) => (x > 0 && x < 0.001 ? "<0.1%" : `${(100 * x).toFixed(1)}%`);
 const TITLES: Record<string, (a: CoachActionRow) => string> = {
-  move_cash_to_debt: a => `Put ${usd(a.amount_cents)} of spare cash toward expensive debt`,
-  close_monthly_gap: () => "Close the monthly gap",
-  trim_discretionary: a => `Trim extras by ${Math.round(100 * a.fraction)}%`,
-  trim_category: a => `Trim ${a.driver.replace("spend:", "").replace("_", " ") || "one category"}`,
+  move_cash_to_debt: a => `Put ${usd(a.amount_cents)} toward debt`,
+  close_monthly_gap: a => `Reduce spending by ${usd(a.amount_cents)} per month`,
+  trim_discretionary: a => `Reduce extras by ${usd(a.amount_cents)} per month`,
+  trim_category: a => `Cut ${a.driver.replace("spend:", "").replace(/_/g, " ") || "category spending"} by ${usd(a.amount_cents)} per month`,
   protect_income: () => "Protect your income",
-  reserve_for_surprises: a => `Set aside ${usd(a.amount_cents)} for surprise bills`,
+  reserve_for_surprises: a => `Reserve ${usd(a.amount_cents)} for surprises`,
 };
 const ORDER = ["move_cash_to_debt", "close_monthly_gap", "trim_category", "trim_discretionary", "reserve_for_surprises", "protect_income"];
 
@@ -20,7 +20,7 @@ export default function CoachActions() {
   const actions = (data?.coach_action ?? []).slice().sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
   return (
     <section className="panel coach-actions" aria-labelledby="actions-title">
-      <div className="panel-heading"><div><h2 id="actions-title">What the coach recommends</h2><p className="coach-sub">Specific moves, each tested on the same simulated futures.</p></div></div>
+      <div className="panel-heading"><div><h2 id="actions-title">Recommendation</h2></div></div>
       {!data ? <p className="actions-empty">Loading…</p> : actions.length === 0 ? (
         <p className="actions-empty">No recommendations yet. Run <code>run_forecast</code> for this customer.</p>
       ) : (
@@ -31,11 +31,10 @@ export default function CoachActions() {
             return (
               <li key={a.kind} className="action-card">
                 <strong>{(TITLES[a.kind] ?? (() => a.kind.replace(/_/g, " ")))(a)}</strong>
-                <p>{a.detail}</p>
+                <details className="action-details"><summary>View details</summary><p>{a.detail}</p><div className="action-chips">{esChanged && <span className={`chip ${a.es_after_cents < a.es_before_cents ? "chip-good" : "chip-warn"}`}>Bad-case loss: {usd(a.es_before_cents)} → {usd(a.es_after_cents)}</span>}</div></details>
                 <div className="action-chips">
                   {a.annual_saving_cents > 0 && <span className="chip chip-good">Saves {usd(a.annual_saving_cents)} a year</span>}
-                  {riskChanged && <span className={`chip ${a.p_low_after > a.p_low_before ? "chip-warn" : "chip-good"}`}>Chance of running low: {pct(a.p_low_before)} → {pct(a.p_low_after)}</span>}
-                  {esChanged && <span className={`chip ${a.es_after_cents < a.es_before_cents ? "chip-good" : "chip-warn"}`}>Bad-case loss: {usd(a.es_before_cents)} → {usd(a.es_after_cents)}</span>}
+                  {riskChanged && <span className={`chip ${a.p_low_after > a.p_low_before ? "chip-warn" : "chip-good"}`}>Risk of running low: {pct(a.p_low_before)} → {pct(a.p_low_after)}</span>}
                 </div>
               </li>
             );

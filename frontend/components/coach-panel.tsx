@@ -1,7 +1,8 @@
 "use client";
-import { useState, type FormEvent } from "react";
-import { Sparkles } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+
 import "./coach-panel.css";
+import { useRouter } from "next/navigation";
 import { useLiveData } from "./live-data-provider";
 import type { QaRow } from "@/lib/live-data";
 
@@ -9,17 +10,19 @@ const EXAMPLES = [
   "If I buy a $30,000 car with $5,000 down, will I still have enough for emergencies?",
   "How am I doing financially?",
   "What if I lose my job for 3 months?",
-  "When will I be debt-free?",
-  "What if I cut dining out in half?",
+
+
 ];
 export const DISCLAIMER = "Educational tool using synthetic data — not financial advice.";
 const VERDICT: Record<string, string> = { comfortable: "Comfortable", tight: "Tight", risky: "Risky" };
 
 interface Answer { question: string; answer: string; verdict: string; interpretation: string; supported: boolean; source: string }
 
-export default function CoachPanel() {
-  const { customerId, data, reload } = useLiveData();
-  const [question, setQuestion] = useState("");
+export default function CoachPanel({ navigateOnAsk = false, initialQuestion = "" }: { navigateOnAsk?: boolean; initialQuestion?: string }) {
+  const router = useRouter();
+  const autoAsked = useRef(false);
+  const { customerId, data, reload, loading } = useLiveData();
+  const [question, setQuestion] = useState(initialQuestion);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [current, setCurrent] = useState<Answer | null>(null);
@@ -27,6 +30,7 @@ export default function CoachPanel() {
   async function ask(q: string) {
     const text = q.trim();
     if (!text || busy) return;
+    if (navigateOnAsk) { router.push(`/coach?question=${encodeURIComponent(text)}`); return; }
     setBusy(true); setError(null); setQuestion(text);
     try {
       const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, question: text }) });
@@ -36,13 +40,12 @@ export default function CoachPanel() {
       reload();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
+  useEffect(() => {
+    if (!initialQuestion || navigateOnAsk || loading || autoAsked.current) return;
+    autoAsked.current = true;
+    void ask(initialQuestion);
+  }, [initialQuestion, navigateOnAsk, loading, customerId]);
   const submit = (event: FormEvent) => { event.preventDefault(); void ask(question); };
-
-  const dataNote = !data
-    ? null
-    : data.external_account.length === 0
-      ? "Only PNC accounts are included; money held at other banks isn’t counted."
-      : "Linked outside accounts count toward your balances; forecasts use PNC accounts only.";
 
   const history = ((data?.qa ?? []) as QaRow[])
     .filter(r => r.supported && r.question !== current?.question)
@@ -50,7 +53,7 @@ export default function CoachPanel() {
     .slice(0, 4);
 
   return <section className="panel coach-panel" aria-labelledby="coach-title">
-    <div className="panel-heading"><div><h2 id="coach-title"><Sparkles size={18} aria-hidden /> Ask the coach</h2></div></div>
+    <div className="panel-heading"><div><h2 id="coach-title">Ask the coach</h2></div></div>
     <form className="coach-form" onSubmit={submit}>
       <label htmlFor="coach-question" className="sr-only">Your question</label>
       <input id="coach-question" value={question} maxLength={300} placeholder="e.g. Can I afford a $1,500 laptop in December?" onChange={event => setQuestion(event.target.value)} disabled={busy} />
@@ -65,10 +68,10 @@ export default function CoachPanel() {
         {current.interpretation && <p className="coach-read">Understood as: {current.interpretation}</p>}
         <p className="coach-text">{current.answer}</p>
         <small>{current.source === "groq" ? "AI-written; every number was checked against the forecast." : "Standard answer (the AI wording didn’t pass the number check or isn’t available)."}</small>
-        <p className="coach-disclaimer">{dataNote && <>{dataNote} </>}Forecasts are ranges, not promises. {DISCLAIMER}</p>
+        <p className="coach-disclaimer">Forecasts are ranges, not promises. {DISCLAIMER}</p>
       </article>}
     </div>
-    {!current && dataNote && <p className="coach-data-note">{dataNote}</p>}
-    {history.length > 0 && <div className="coach-history"><h3>Earlier questions</h3>{history.map(h => <details key={String(h.qa_id)}><summary>{h.verdict && <span className="coach-verdict" data-verdict={h.verdict}>{VERDICT[h.verdict] ?? h.verdict}</span>}{h.question}</summary><p className="coach-text">{h.answer}</p></details>)}</div>}
+
+    {!navigateOnAsk && history.length > 0 && <div className="coach-history"><h3>Earlier questions</h3>{history.map(h => <details key={String(h.qa_id)}><summary>{h.verdict && <span className="coach-verdict" data-verdict={h.verdict}>{VERDICT[h.verdict] ?? h.verdict}</span>}{h.question}</summary><p className="coach-text">{h.answer}</p></details>)}</div>}
   </section>;
 }
