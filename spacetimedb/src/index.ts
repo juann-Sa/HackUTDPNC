@@ -17,7 +17,7 @@ import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 import { backtestCustomer } from './math/backtest';
 import { GOAL_KINDS, MAX_GOAL_DAYS, evaluateGoal } from './math/goals';
-import { ANSWER_ASK, ANSWER_TOPIC, LOAN_DEFAULTS, PARSE_PROMPT, TOPIC_LABELS, evaluateQuestion, parseScenario, purchaseLoan, scenarioJson, type ParsedScenario } from './math/ask';
+import { ANSWER_ASK, ANSWER_TOPIC, PARSE_PROMPT, TOPIC_LABELS, evaluateQuestion, parseScenario } from './math/ask';
 import { addMonths, debtsFromSchedule, simulatePayoff } from './math/payoff';
 
 export default spacetimedb;
@@ -639,27 +639,6 @@ function writeWhatifLine(ctx: Ctx, cid: string, f: ForecastResult, label: string
 
 const CategoryMult = t.object('CategoryMult', { category: t.string(), mult: t.f64() });
 
-/** The forecast line the Future page draws for a scenario (habit view, net cash, days 0..180). */
-function forecastJson(f: ForecastResult, label: string): string {
-  return JSON.stringify(f.netCashBands.map((b, i) => ({
-    day_offset: i, date: f.dates[i], low_cents: round(b.p5), mid_cents: round(b.p50), high_cents: round(b.p95), label,
-  })));
-}
-
-function writeFutureScenario(ctx: Ctx, cid: string, type: 'coach' | 'user', scenario: string, forecast: string) {
-  const id = `${cid}|${type}`;
-  if (ctx.db.futureScenario.scenario_id.find(id)) ctx.db.futureScenario.scenario_id.delete(id);
-  ctx.db.futureScenario.insert({
-    scenario_id: id, customer_id: cid, scenario_type: type, scenario_json: scenario, forecast_json: forecast, updated_at: ctx.timestamp,
-  });
-}
-
-/** Future page: drop the customer's own adjustments so the coach's scenario shows again. */
-export const clear_user_future_scenario = spacetimedb.reducer({ customer_id: t.string() }, (ctx, { customer_id }) => {
-  const id = `${customer_id}|user`;
-  if (ctx.db.futureScenario.scenario_id.find(id)) ctx.db.futureScenario.scenario_id.delete(id);
-});
-
 /** What-if simulator: one custom scenario on the same random draws as the baseline (shared live). */
 export const run_what_if = spacetimedb.reducer(
   {
@@ -672,32 +651,9 @@ export const run_what_if = spacetimedb.reducer(
     move_to_debt_cents: t.f64(),
     job_loss_months: t.u32(),
     card_apr_bump_pct: t.f64(),
-    // financed purchase (Future page): purchase_kind '' = none, else car | home | other
-    purchase_kind: t.string(),
-    purchase_price_cents: t.f64(),
-    down_payment_cents: t.f64(),
-    loan_apr_pct: t.f64(),
-    loan_term_months: t.u32(),
-    purchase_in_days: t.u32(),
   },
   (ctx, args) => {
-    if (!ctx.db.customer.customer_id.find(args.customer_id)) throw new SenderError(`Unknown customer ${args.customer_id}`);
-    const kind = args.purchase_kind;
-    if (kind !== '' && kind !== 'car' && kind !== 'home' && kind !== 'other') throw new SenderError('Purchase type must be car, home or other');
-    const nums = [args.income_mult, args.one_off_cents, args.move_to_debt_cents, args.card_apr_bump_pct, args.purchase_price_cents, args.down_payment_cents, args.loan_apr_pct, ...args.category_mults.map(c => c.mult)];
-    if (!nums.every(Number.isFinite)) throw new SenderError('All amounts must be numbers');
     const { schedule } = scheduleFor(ctx, args.customer_id);
-    const clampN = (x: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, x));
-    const purchase: ParsedScenario['purchase'] = kind && args.purchase_price_cents > 0
-      ? (() => {
-          const price = Math.round(clampN(args.purchase_price_cents, 0, 200_000_000));
-          return {
-            kind, priceCents: price, downCents: Math.round(clampN(args.down_payment_cents, 0, price)),
-            aprPct: clampN(args.loan_apr_pct, 0, 36), termMonths: Math.round(clampN(args.loan_term_months || LOAN_DEFAULTS[kind].termMonths, 6, 360)),
-            inDays: Math.round(clampN(args.purchase_in_days, 0, 179)), aprGiven: true, termGiven: true,
-          };
-        })()
-      : undefined;
     const a = DEFAULT_ASSUMPTIONS;
     const tapes = makeTapes(seedFromString(args.customer_id), a, schedule.months.length + 1);
     const sc: Scenario = {
@@ -710,20 +666,11 @@ export const run_what_if = spacetimedb.reducer(
       moveToDebtCents: args.move_to_debt_cents,
       jobLossMonths: args.job_loss_months,
       cardAprBumpPct: args.card_apr_bump_pct,
-      newLoan: purchase && purchaseLoan(purchase),
     };
     writeForecast(ctx, args.customer_id, runForecast(schedule, a, sc, tapes), a);
     // third line on the 360° chart: same habit view and net-cash measure as the other two lines
     const h = habitAssumptions(a);
-    const habit = runForecast(schedule, h, sc, makeTapes(seedFromString(args.customer_id), h, schedule.months.length + 1));
-    writeWhatifLine(ctx, args.customer_id, habit, 'Your what-if');
-    // Future page: the customer's own scenario and its line
-    const p: ParsedScenario = {
-      supported: true, incomeMult: args.income_mult, categoryMult: sc.categoryMult ?? {},
-      oneOffCents: args.one_off_cents, oneOffInDays: sc.oneOff?.dayIndex ?? args.one_off_day,
-      moveToDebtCents: args.move_to_debt_cents, jobLossMonths: args.job_loss_months, purchase, summary: 'Your adjustments', topic: 'none',
-    };
-    writeFutureScenario(ctx, args.customer_id, 'user', scenarioJson(p, args.card_apr_bump_pct), forecastJson(habit, 'Your scenario'));
+    writeWhatifLine(ctx, args.customer_id, runForecast(schedule, h, sc, makeTapes(seedFromString(args.customer_id), h, schedule.months.length + 1)), 'Your what-if');
   }
 );
 
@@ -1126,12 +1073,11 @@ export const ask = spacetimedb.procedure(
       return `No data for ${cid} yet.`;
     }
     const { key, model } = groqEnv(ctx);
-    const record = (row: { interpretation: string; supported: boolean; verdict: string; answer: string; source: string; rejected: string; scenario?: string }) =>
+    const record = (row: { interpretation: string; supported: boolean; verdict: string; answer: string; source: string; rejected: string }) =>
       ctx.withTx(tx =>
         tx.db.qa.insert({
           qa_id: 0n, customer_id: cid, question: q, interpretation: row.interpretation, supported: row.supported,
           verdict: row.verdict, answer: row.answer, source: row.source, rejected_reason: row.rejected, created_at: tx.timestamp,
-          scenario_json: row.scenario ?? '',
         })
       );
     if (!key) {
@@ -1169,16 +1115,11 @@ export const ask = spacetimedb.procedure(
     const r = explainWithAudit(ctx, ev.facts, `${ANSWER_ASK} The question was: "${q}"`, ev.fallback);
 
     // 4) store: the what-if forecast, the third chart line, and the Q&A
-    const scen = scenarioJson(p);
     ctx.withTx(tx => {
       writeForecast(tx, cid, ev.whatIf, DEFAULT_ASSUMPTIONS);
       writeWhatifLine(tx, cid, ev.habit, ev.interpretation.slice(0, 80));
-      // Future page: the coach's scenario replaces the last one, and the customer's own edits start fresh
-      writeFutureScenario(tx, cid, 'coach', scen, forecastJson(ev.habit, 'Coach scenario'));
-      const userId = `${cid}|user`;
-      if (tx.db.futureScenario.scenario_id.find(userId)) tx.db.futureScenario.scenario_id.delete(userId);
     });
-    record({ interpretation: ev.interpretation, supported: true, verdict: ev.verdict, answer: r.text, source: r.source, rejected: r.rejected, scenario: scen });
+    record({ interpretation: ev.interpretation, supported: true, verdict: ev.verdict, answer: r.text, source: r.source, rejected: r.rejected });
     return r.text;
   }
 );

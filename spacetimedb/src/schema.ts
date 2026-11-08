@@ -455,24 +455,6 @@ export const qa = table(
     source: t.string(), // groq | template
     rejected_reason: t.string(),
     created_at: t.timestamp(),
-    scenario_json: t.string().default(''), // the what-if this question was read as (JSON), '' if none
-  }
-);
-
-/**
- * Future page scenarios: the coach's reading of the last what-if question ("coach") and the customer's own
- * adjustments ("user"), each with its 180-day forecast line (same habit view and net-cash measure as the
- * 360° chart). JSON columns keep the frontend contract in one place.
- */
-export const futureScenario = table(
-  { name: 'future_scenario', public: true },
-  {
-    scenario_id: t.string().primaryKey(), // customer_id|coach or customer_id|user
-    customer_id: t.string().index('btree'),
-    scenario_type: t.string(), // coach | user
-    scenario_json: t.string(), // { incomeMult, categoryMult, oneOffCents, oneOffInDays, moveToDebtCents, jobLossMonths, cardAprBumpPct, purchase?, summary }
-    forecast_json: t.string(), // [{ day_offset, date, low_cents, mid_cents, high_cents, label }] for days 0..180
-    updated_at: t.timestamp(),
   }
 );
 
@@ -614,7 +596,6 @@ const spacetimedb = schema({
   dangerDay,
   timelineWhatif,
   qa,
-  futureScenario,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:
