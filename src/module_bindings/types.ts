@@ -8,18 +8,315 @@ import {
   t as __t,
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
-} from 'spacetimedb';
+} from "spacetimedb";
 
-export const Message = __t.object('Message', {
-  sender: __t.identity(),
-  sent: __t.timestamp(),
-  text: __t.string(),
+export const Account = __t.object("Account", {
+  accountId: __t.string(),
+  customerId: __t.string(),
+  accountType: __t.string(),
+  balanceCents: __t.f64(),
+  openingBalanceCents: __t.f64(),
+  monthlyPaymentCents: __t.f64(),
+  aprPct: __t.f64(),
+  annualYieldPct: __t.f64(),
 });
-export type Message = __Infer<typeof Message>;
+export type Account = __Infer<typeof Account>;
 
-export const User = __t.object('User', {
+export const Admin = __t.object("Admin", {
   identity: __t.identity(),
-  name: __t.option(__t.string()),
-  online: __t.bool(),
 });
-export type User = __Infer<typeof User>;
+export type Admin = __Infer<typeof Admin>;
+
+export const BookLine = __t.object("BookLine", {
+  accountId: __t.string(),
+  customerId: __t.string(),
+  accountType: __t.string(),
+  side: __t.string(),
+  tier: __t.string(),
+  balanceCents: __t.f64(),
+  ratePct: __t.f64(),
+  annualCarryCents: __t.f64(),
+  highCost: __t.bool(),
+});
+export type BookLine = __Infer<typeof BookLine>;
+
+export const BookSnapshot = __t.object("BookSnapshot", {
+  customerId: __t.string(),
+  asOf: __t.string(),
+  netWorthCents: __t.f64(),
+  liquidCents: __t.f64(),
+  lockedCents: __t.f64(),
+  totalAssetsCents: __t.f64(),
+  totalDebtCents: __t.f64(),
+  monthlyIncomeCents: __t.f64(),
+  monthlyOutflowCents: __t.f64(),
+  monthlyDebtPaymentsCents: __t.f64(),
+  monthlySurplusCents: __t.f64(),
+  runwayMonths: __t.option(__t.f64()),
+  debtToIncome: __t.option(__t.f64()),
+  utilization: __t.option(__t.f64()),
+  savingsRate: __t.option(__t.f64()),
+  runwayStatus: __t.string(),
+  dtiStatus: __t.string(),
+  utilizationStatus: __t.string(),
+  savingsRateStatus: __t.string(),
+});
+export type BookSnapshot = __Infer<typeof BookSnapshot>;
+
+export const CarryMove = __t.object("CarryMove", {
+  moveId: __t.string(),
+  customerId: __t.string(),
+  accountId: __t.string(),
+  aprPct: __t.f64(),
+  amountCents: __t.f64(),
+  annualSavingCents: __t.f64(),
+});
+export type CarryMove = __Infer<typeof CarryMove>;
+
+export const CarrySummary = __t.object("CarrySummary", {
+  customerId: __t.string(),
+  earnCents: __t.f64(),
+  costCents: __t.f64(),
+  netCents: __t.f64(),
+  structuralCents: __t.f64(),
+  highCostCents: __t.f64(),
+  idleCashCents: __t.f64(),
+  fixableLeakCents: __t.f64(),
+  bufferMonths: __t.f64(),
+});
+export type CarrySummary = __Infer<typeof CarrySummary>;
+
+export const CategoryMult = __t.object("CategoryMult", {
+  category: __t.string(),
+  mult: __t.f64(),
+});
+export type CategoryMult = __Infer<typeof CategoryMult>;
+
+export const CoachAction = __t.object("CoachAction", {
+  actionId: __t.string(),
+  customerId: __t.string(),
+  kind: __t.string(),
+  amountCents: __t.f64(),
+  fraction: __t.f64(),
+  annualSavingCents: __t.f64(),
+  pLowBefore: __t.f64(),
+  pLowAfter: __t.f64(),
+  detail: __t.string(),
+});
+export type CoachAction = __Infer<typeof CoachAction>;
+
+export const Customer = __t.object("Customer", {
+  customerId: __t.string(),
+  monthlyIncomeCents: __t.f64(),
+  monthlyNonDebtExpensesCents: __t.f64(),
+  creditLimitCents: __t.f64(),
+});
+export type Customer = __Infer<typeof Customer>;
+
+export const DailyLiquid = __t.object("DailyLiquid", {
+  dailyId: __t.string(),
+  customerId: __t.string(),
+  date: __t.string(),
+  checkingCents: __t.f64(),
+  savingsCents: __t.f64(),
+  liquidCents: __t.f64(),
+});
+export type DailyLiquid = __Infer<typeof DailyLiquid>;
+
+export const ExternalAccount = __t.object("ExternalAccount", {
+  accountId: __t.string(),
+  customerId: __t.string(),
+  institution: __t.string(),
+  nickname: __t.string(),
+  accountType: __t.string(),
+  balanceCents: __t.f64(),
+  aprPct: __t.f64(),
+  annualYieldPct: __t.f64(),
+  monthlyPaymentCents: __t.f64(),
+  addedAt: __t.timestamp(),
+});
+export type ExternalAccount = __Infer<typeof ExternalAccount>;
+
+export const ForecastAssumption = __t.object("ForecastAssumption", {
+  customerId: __t.string(),
+  sigmaShared: __t.f64(),
+  sigmaIdio: __t.f64(),
+  phi: __t.f64(),
+  incomeSigma: __t.f64(),
+  shrinkK: __t.f64(),
+  studentTNu: __t.f64(),
+  jumpsPerYear: __t.f64(),
+  jumpMedianCents: __t.f64(),
+  pJobLossMonthly: __t.f64(),
+  pRehireMonthly: __t.f64(),
+  iraMu: __t.f64(),
+  iraSigma: __t.f64(),
+  riskCap: __t.f64(),
+  bufferMonths: __t.f64(),
+  seed: __t.u32(),
+});
+export type ForecastAssumption = __Infer<typeof ForecastAssumption>;
+
+export const ForecastBand = __t.object("ForecastBand", {
+  bandId: __t.string(),
+  customerId: __t.string(),
+  scenario: __t.string(),
+  dayIndex: __t.u32(),
+  date: __t.string(),
+  p5Cents: __t.f64(),
+  p25Cents: __t.f64(),
+  p50Cents: __t.f64(),
+  p75Cents: __t.f64(),
+  p95Cents: __t.f64(),
+});
+export type ForecastBand = __Infer<typeof ForecastBand>;
+
+export const ForecastRun = __t.object("ForecastRun", {
+  runId: __t.string(),
+  customerId: __t.string(),
+  scenario: __t.string(),
+  label: __t.string(),
+  includeExternal: __t.bool(),
+  paths: __t.u32(),
+  horizonDays: __t.u32(),
+  startDate: __t.string(),
+  thresholdCents: __t.f64(),
+  pLow: __t.f64(),
+  pLowSe: __t.f64(),
+  var95Cents: __t.f64(),
+  es95Cents: __t.f64(),
+  mddP50Cents: __t.f64(),
+  mddP95Cents: __t.f64(),
+  endLiquidP5Cents: __t.f64(),
+  endLiquidP50Cents: __t.f64(),
+  endLiquidP95Cents: __t.f64(),
+  endNetWorthP5Cents: __t.f64(),
+  endNetWorthP50Cents: __t.f64(),
+  endNetWorthP95Cents: __t.f64(),
+  plannedChangeCents: __t.f64(),
+});
+export type ForecastRun = __Infer<typeof ForecastRun>;
+
+export const FrontierPoint = __t.object("FrontierPoint", {
+  frontierId: __t.string(),
+  customerId: __t.string(),
+  moveCents: __t.f64(),
+  pLow: __t.f64(),
+  annualSavingCents: __t.f64(),
+  recommended: __t.bool(),
+});
+export type FrontierPoint = __Infer<typeof FrontierPoint>;
+
+export const LedgerEntry = __t.object("LedgerEntry", {
+  transactionId: __t.string(),
+  customerId: __t.string(),
+  accountId: __t.string(),
+  accountType: __t.string(),
+  postedDate: __t.string(),
+  transactionType: __t.string(),
+  category: __t.string(),
+  description: __t.string(),
+  amountCents: __t.f64(),
+  balanceChangeCents: __t.f64(),
+  balanceAfterCents: __t.f64(),
+  flowClass: __t.string(),
+  transferId: __t.string(),
+});
+export type LedgerEntry = __Infer<typeof LedgerEntry>;
+
+export const Narration = __t.object("Narration", {
+  narrationId: __t.string(),
+  customerId: __t.string(),
+  topic: __t.string(),
+  text: __t.string(),
+  source: __t.string(),
+  model: __t.string(),
+  rejectedReason: __t.string(),
+  createdAt: __t.timestamp(),
+});
+export type Narration = __Infer<typeof Narration>;
+
+export const PnlMonth = __t.object("PnlMonth", {
+  pnlId: __t.string(),
+  customerId: __t.string(),
+  month: __t.string(),
+  incomeCents: __t.f64(),
+  spendingCents: __t.f64(),
+  debtInterestCents: __t.f64(),
+  feesCents: __t.f64(),
+  assetInterestCents: __t.f64(),
+  extInCents: __t.f64(),
+  extOutCents: __t.f64(),
+  deltaNetWorthCents: __t.f64(),
+  organicCents: __t.f64(),
+  residualCents: __t.f64(),
+});
+export type PnlMonth = __Infer<typeof PnlMonth>;
+
+export const RiskSource = __t.object("RiskSource", {
+  riskId: __t.string(),
+  customerId: __t.string(),
+  scenario: __t.string(),
+  source: __t.string(),
+  varShare: __t.f64(),
+  esContributionCents: __t.f64(),
+});
+export type RiskSource = __Infer<typeof RiskSource>;
+
+export const Sensitivity = __t.object("Sensitivity", {
+  sensitivityId: __t.string(),
+  customerId: __t.string(),
+  lever: __t.string(),
+  label: __t.string(),
+  deltaPLow: __t.f64(),
+  deltaEndP50Cents: __t.f64(),
+});
+export type Sensitivity = __Infer<typeof Sensitivity>;
+
+export const SpendingMonth = __t.object("SpendingMonth", {
+  spendingId: __t.string(),
+  customerId: __t.string(),
+  month: __t.string(),
+  category: __t.string(),
+  amountCents: __t.f64(),
+});
+export type SpendingMonth = __Infer<typeof SpendingMonth>;
+
+export const Statement = __t.object("Statement", {
+  statementId: __t.string(),
+  customerId: __t.string(),
+  accountId: __t.string(),
+  accountType: __t.string(),
+  month: __t.string(),
+  openingCents: __t.f64(),
+  increasesCents: __t.f64(),
+  decreasesCents: __t.f64(),
+  closingCents: __t.f64(),
+  transactionCount: __t.u32(),
+});
+export type Statement = __Infer<typeof Statement>;
+
+export const Timeline360 = __t.object("Timeline360", {
+  timelineId: __t.string(),
+  customerId: __t.string(),
+  dayOffset: __t.i32(),
+  date: __t.string(),
+  actualNetCashCents: __t.option(__t.f64()),
+  actualLiquidCents: __t.option(__t.f64()),
+  continueLowCents: __t.option(__t.f64()),
+  continueMidCents: __t.option(__t.f64()),
+  continueHighCents: __t.option(__t.f64()),
+  coachLowCents: __t.option(__t.f64()),
+  coachMidCents: __t.option(__t.f64()),
+  coachHighCents: __t.option(__t.f64()),
+});
+export type Timeline360 = __Infer<typeof Timeline360>;
+
+export const ValidationIssue = __t.object("ValidationIssue", {
+  issueId: __t.u64(),
+  customerId: __t.string(),
+  kind: __t.string(),
+  detail: __t.string(),
+});
+export type ValidationIssue = __Infer<typeof ValidationIssue>;
+

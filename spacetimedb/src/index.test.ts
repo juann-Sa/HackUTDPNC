@@ -274,7 +274,8 @@ describe('AI narration guardrail', () => {
     expect(row.text).toBe(text);
     expect(row.source).toBe('template');
     expect(text).toMatch(/Net cash today/);
-    expect(() => m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'gossip' })).toThrow(/Unknown topic/);
+    expect(m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'gossip' })).toMatch(/Unknown topic/);
+    expect(m.narrate(test.procedureContext(stranger), { customer_id: 'C999', topic: 'overview' })).toMatch(/No results for C999/);
     writeFileSync('/tmp/st360_narration.txt', text);
   }, 60_000);
 });

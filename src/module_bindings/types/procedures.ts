@@ -3,6 +3,11 @@
 
 /* eslint-disable */
 /* tslint:disable */
-import { type Infer as __Infer } from 'spacetimedb';
+import { type Infer as __Infer } from "spacetimedb";
 
 // Import all procedure arg schemas
+import * as NarrateProcedure from "../narrate_procedure";
+
+export type NarrateArgs = __Infer<typeof NarrateProcedure.params>;
+export type NarrateResult = __Infer<typeof NarrateProcedure.returnType>;
+

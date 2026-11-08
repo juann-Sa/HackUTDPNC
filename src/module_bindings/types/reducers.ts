@@ -3,11 +3,30 @@
 
 /* eslint-disable */
 /* tslint:disable */
-import { type Infer as __Infer } from 'spacetimedb';
+import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
-import SendMessageReducer from '../send_message_reducer';
-import SetNameReducer from '../set_name_reducer';
+import AddExternalAccountReducer from "../add_external_account_reducer";
+import LoadAccountsReducer from "../load_accounts_reducer";
+import LoadCustomersReducer from "../load_customers_reducer";
+import LoadLedgerReducer from "../load_ledger_reducer";
+import LoadStatementsReducer from "../load_statements_reducer";
+import RecomputeAllReducer from "../recompute_all_reducer";
+import RecomputeCustomerReducer from "../recompute_customer_reducer";
+import RemoveExternalAccountReducer from "../remove_external_account_reducer";
+import ResetDataReducer from "../reset_data_reducer";
+import RunForecastReducer from "../run_forecast_reducer";
+import RunWhatIfReducer from "../run_what_if_reducer";
 
-export type SendMessageParams = __Infer<typeof SendMessageReducer>;
-export type SetNameParams = __Infer<typeof SetNameReducer>;
+export type AddExternalAccountParams = __Infer<typeof AddExternalAccountReducer>;
+export type LoadAccountsParams = __Infer<typeof LoadAccountsReducer>;
+export type LoadCustomersParams = __Infer<typeof LoadCustomersReducer>;
+export type LoadLedgerParams = __Infer<typeof LoadLedgerReducer>;
+export type LoadStatementsParams = __Infer<typeof LoadStatementsReducer>;
+export type RecomputeAllParams = __Infer<typeof RecomputeAllReducer>;
+export type RecomputeCustomerParams = __Infer<typeof RecomputeCustomerReducer>;
+export type RemoveExternalAccountParams = __Infer<typeof RemoveExternalAccountReducer>;
+export type ResetDataParams = __Infer<typeof ResetDataReducer>;
+export type RunForecastParams = __Infer<typeof RunForecastReducer>;
+export type RunWhatIfParams = __Infer<typeof RunWhatIfReducer>;
+

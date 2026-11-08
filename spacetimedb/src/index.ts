@@ -511,8 +511,14 @@ export const narrate = spacetimedb.procedure(
   { customer_id: t.string(), topic: t.string() },
   t.string(),
   (ctx, { customer_id: cid, topic }) => {
-    if (!TOPICS.has(topic)) throw new SenderError(`Unknown topic ${topic}`);
-    const facts = ctx.withTx(tx => gatherFacts(tx, cid));
+    // Procedures report thrown errors as fatal (HTTP 500), so problems come back as readable text.
+    if (!TOPICS.has(topic)) return `Unknown topic "${topic}". Use one of: ${[...TOPICS].join(', ')}.`;
+    let facts: Fact[];
+    try {
+      facts = ctx.withTx(tx => gatherFacts(tx, cid));
+    } catch (e) {
+      return `No results for ${cid} yet. Load the data and call recompute_customer (and run_forecast) first.`;
+    }
     const env = (k: 'GROQ_API_KEY' | 'GROQ_MODEL') => {
       try {
         return ctx.env.get(k) ?? null;
