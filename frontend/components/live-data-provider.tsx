@@ -7,7 +7,6 @@ const DEFAULT_CUSTOMER = "C006";
 const storageKey = "pnc-navigator-customer-v1";
 
 interface LiveData {
-  reload: () => void;
   customerId: string;
   setCustomerId: (id: string) => void;
   customers: string[];
@@ -18,6 +17,8 @@ interface LiveData {
   availableAccounts: OptionalAccountType[];
   /** Calls an allowed SpacetimeDB reducer, then reloads this customer's data. Throws the reducer's error. */
   call: (reducer: string, args: Record<string, unknown>) => Promise<void>;
+  /** Re-fetch this customer's data (e.g. after the coach stored a new answer). */
+  reload: () => void;
 }
 
 const Ctx = createContext<LiveData | null>(null);
@@ -64,13 +65,13 @@ export default function LiveDataProvider({ children }: { children: ReactNode }) 
     setVersion(v => v + 1);
   }, []);
 
-  const reload = useCallback(() => setVersion(value => value + 1), []);
+  const reload = useCallback(() => setVersion(v => v + 1), []);
 
   const tabs = useMemo(() => (data ? accountTabsFor(data) : null), [data]);
 
   const value: LiveData = {
-    customerId, setCustomerId, customers, data, loading, error, reload,
-    accounts: tabs?.data ?? null, availableAccounts: tabs?.available ?? [], call,
+    customerId, setCustomerId, customers, data, loading, error,
+    accounts: tabs?.data ?? null, availableAccounts: tabs?.available ?? [], call, reload,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

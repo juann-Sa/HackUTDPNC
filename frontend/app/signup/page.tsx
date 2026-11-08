@@ -3,6 +3,8 @@
 import { useState, type ChangeEvent, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import AuthLayout from '@/components/AuthLayout/AuthLayout'
+import DemoCustomerField from '@/components/DemoCustomerField'
+import { DEFAULT_CUSTOMER, startSession } from '@/lib/demo-session'
 import './signup.css'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -30,7 +32,6 @@ function scorePassword(pw: string): number {
 }
 
 export default function SignUp() {
-  const router = useRouter()
   const [values, setValues] = useState<SignUpValues>({
     name: '',
     email: '',
@@ -40,6 +41,8 @@ export default function SignUp() {
   })
   const [errors, setErrors] = useState<SignUpErrors>({})
   const [showPassword, setShowPassword] = useState(false)
+  const [customerId, setCustomerId] = useState(DEFAULT_CUSTOMER)
+  const router = useRouter()
 
   const strength = scorePassword(values.password)
 
@@ -54,7 +57,7 @@ export default function SignUp() {
     })
   }
 
-  const validate = (): SignUpErrors => {
+  const validate = (values: SignUpValues): SignUpErrors => {
     const next: SignUpErrors = {}
     if (!values.name.trim()) next.name = 'Please enter your name.'
     if (!values.email) next.email = 'Email is required.'
@@ -69,11 +72,16 @@ export default function SignUp() {
 
   const onSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
-    const next = validate()
+    // read the form itself so browser-autofilled fields count even if React never saw a change
+    const form = new FormData(e.currentTarget)
+    const field = (k: string) => String(form.get(k) ?? '')
+    const v = { ...values, name: field('name'), email: field('email').trim(), password: field('password'), confirm: field('confirm') }
+    const next = validate(v)
     setErrors(next)
     if (Object.keys(next).length === 0) {
-      // Demo navigation only; no authentication API is called.
-      router.push('/signin')
+      // Demo sign-up: no account is created; remember the name, email and chosen customer in this browser only.
+      startSession({ email: v.email, name: v.name.trim(), customerId })
+      router.push('/home')
     }
   }
 
@@ -84,6 +92,10 @@ export default function SignUp() {
       altLinkText="Sign in"
       altLinkTo="/signin"
     >
+      <div className="alert" role="note">
+        <span>Demo: no real account is created. Nothing is stored or sent.</span>
+      </div>
+
       <form className="auth-form" onSubmit={onSubmit} noValidate>
         <div className="field">
           <label className="field__label" htmlFor="name">
@@ -179,6 +191,8 @@ export default function SignUp() {
           </div>
           {errors.confirm && <span className="field__error">{errors.confirm}</span>}
         </div>
+
+        <DemoCustomerField value={customerId} onChange={setCustomerId} />
 
         <div className="field">
           <label className="checkbox signup-terms">
