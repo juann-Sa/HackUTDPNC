@@ -18,6 +18,7 @@ import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPromp
 import { backtestCustomer } from './math/backtest';
 import { GOAL_KINDS, MAX_GOAL_DAYS, evaluateGoal } from './math/goals';
 import { ANSWER_ASK, PARSE_PROMPT, evaluateQuestion, parseScenario } from './math/ask';
+import { addMonths, debtsFromSchedule, simulatePayoff } from './math/payoff';
 
 export default spacetimedb;
 
@@ -360,6 +361,36 @@ export const run_forecast = spacetimedb.reducer(
     const an = analyze(schedule, a, seed, include_external, snap.monthly_outflow_cents);
     for (const f of [an.baseline, an.coach, ...an.stresses]) writeForecast(ctx, cid, f, a);
 
+    // Debt payoff: today's payments vs the coach's move plus rolled-over payments.
+    const move = an.actions.find(x => x.kind === 'move_cash_to_debt')?.amountCents ?? 0;
+    const debts = debtsFromSchedule(schedule);
+    const now = simulatePayoff(debts, 0, false);
+    const plan = simulatePayoff(debts, move, true);
+    const asOfIso = schedule.asOf;
+    const monthOf = (n: number | undefined) => (n === undefined ? undefined : addMonths(asOfIso, n));
+    for (const r of [...ctx.db.debtPayoff.customer_id.filter(cid)]) ctx.db.debtPayoff.account_id.delete(r.account_id);
+    now.debts.forEach((d, i) => {
+      const c = plan.debts[i];
+      ctx.db.debtPayoff.insert({
+        account_id: d.id, customer_id: cid, account_type: d.type, balance_cents: d.balance, apr_pct: d.aprPct,
+        monthly_payment_cents: round(d.monthlyPayment), payoff_months: d.months, payoff_month: monthOf(d.months),
+        interest_cents: round(d.interest), coach_payoff_months: c.months, coach_payoff_month: monthOf(c.months),
+        coach_interest_cents: round(c.interest),
+      });
+    });
+    if (ctx.db.debtPlan.customer_id.find(cid)) ctx.db.debtPlan.customer_id.delete(cid);
+    ctx.db.debtPlan.insert({
+      customer_id: cid,
+      consumer_free_month: monthOf(now.consumerMonths),
+      coach_consumer_free_month: monthOf(plan.consumerMonths),
+      all_free_month: monthOf(now.allMonths),
+      coach_all_free_month: monthOf(plan.allMonths),
+      total_interest_cents: round(now.totalInterest),
+      coach_total_interest_cents: round(plan.totalInterest),
+      interest_saved_cents: round(now.totalInterest - plan.totalInterest),
+      coach_move_cents: move,
+    });
+
     // Danger days from the baseline (life events included).
     for (const r of [...ctx.db.dangerDay.customer_id.filter(cid)]) ctx.db.dangerDay.danger_id.delete(r.danger_id);
     an.baseline.danger.forEach((d, i) =>
@@ -586,6 +617,16 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
     if (next)
       add('danger', `Next day your checking could dip below ${usd(next.threshold_cents)}: ${when(next.date)} (${pct(next.p_below, 0)} chance)${next.reasons ? `, when ${next.reasons} come out` : ''}`);
     else add('danger', `No day in the next 180 has more than a 10% chance of checking dipping below ${usd(dangers[0].threshold_cents)}`);
+  }
+  const dp = ctx.db.debtPlan.customer_id.find(cid);
+  if (dp) {
+    const MN = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const mon = (ym: string | undefined) => (ym ? `${MN[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}` : 'not at the current pace');
+    add('debt_free', `Debt other than the mortgage paid off by: ${mon(dp.consumer_free_month)} at today's payments; ${mon(dp.coach_consumer_free_month)} with the coach's plan (spare cash to the highest-rate debt, then rolling each paid-off payment into the next)`);
+    const stuck = [...ctx.db.debtPayoff.customer_id.filter(cid)].filter(d => d.payoff_months === undefined && d.account_type !== 'mortgage');
+    if (dp.interest_saved_cents > 0)
+      add('interest_saved', `Interest saved over the life of your debts with the coach's plan: ${usd(dp.interest_saved_cents)}${stuck.length ? ' (a balance that never shrinks is counted for up to 40 years)' : ''}`);
+    if (stuck.length) add('debt_stuck', `Not shrinking at today's payments: ${stuck.map(d => d.account_type.replace('_', ' ')).join(', ')}`);
   }
   return f;
 }

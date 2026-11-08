@@ -9,6 +9,7 @@ import { analyze, RISK_CAP } from './math/coach';
 import { Draws, Tape, invNorm, seedFromString } from './math/rng';
 import { evaluateQuestion, parseScenario, verdict } from './math/ask';
 import { auditReply } from './math/narrate';
+import { addMonths, simulatePayoff } from './math/payoff';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
 function csv(name: string): Record<string, string>[] {
@@ -162,4 +163,32 @@ describe('free-form questions', () => {
     expect(auditReply(`Yes, it looks ${ev.verdict}: your cash would likely be about ${cash[1]} in 180 days instead of ${cash[0]}.`, ev.facts).ok).toBe(true);
     console.log(ev.fallback);
   }, 60_000);
+});
+
+describe('debt payoff', () => {
+  it('matches the closed-form amortization for a plain loan', () => {
+    // $10,000 at 12% APR, $222.45/month (222.44 rounded up) = 60 months (standard amortization)
+    const r = simulatePayoff([{ id: 'L', type: 'personal_loan', balance: 1_000_000, aprPct: 12, payment: 22_245, isCard: false, paydown: 0 }], 0, false);
+    expect(r.debts[0].months).toBe(60);
+    expect(Math.abs(r.debts[0].interest - (60 * 22_245 - 1_000_000))).toBeLessThan(100);
+  });
+  it('a card that is not shrinking never pays off; the coach plan clears it and saves interest', () => {
+    const debts = [
+      { id: 'C', type: 'credit_card', balance: 500_000, aprPct: 22.5, payment: 0, isCard: true, paydown: -500 },
+      { id: 'P', type: 'personal_loan', balance: 800_000, aprPct: 11, payment: 25_000, isCard: false, paydown: 0 },
+      { id: 'A', type: 'auto_loan', balance: 900_000, aprPct: 7.5, payment: 20_000, isCard: false, paydown: 0 },
+    ];
+    const now = simulatePayoff(debts, 0, false);
+    const plan = simulatePayoff(debts, 500_000, true);
+    expect(now.debts[0].months).toBeUndefined();
+    expect(now.consumerMonths).toBeUndefined();
+    expect(plan.debts[0].months).toBe(0);
+    expect(plan.consumerMonths!).toBeLessThan(now.debts[2].months!);
+    expect(plan.totalInterest).toBeLessThan(now.totalInterest);
+  });
+  it('adds months across year ends', () => {
+    expect(addMonths('2026-10-31', 3)).toBe('2027-01');
+    expect(addMonths('2026-10-31', 14)).toBe('2027-12');
+    expect(addMonths('2026-10-31', 0)).toBe('2026-10');
+  });
 });

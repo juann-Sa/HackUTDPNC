@@ -516,3 +516,18 @@ describe('ask procedure and the what-if line', () => {
     expect(Math.abs(none[180].mid_cents - trip[180].mid_cents - 200_000)).toBeLessThan(10_000);
   }, 60_000);
 });
+
+describe('debt payoff tables', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+  it('writes payoff dates for every debt and a plan summary', () => {
+    const rows = [...test.db.debtPayoff.customer_id.filter('C006')];
+    expect(rows.map(r => r.account_type).sort()).toEqual(['auto_loan', 'credit_card', 'mortgage', 'personal_loan']);
+    const plan = test.db.debtPlan.customer_id.find('C006')!;
+    expect(plan.interest_saved_cents).toBeGreaterThan(0);
+    expect(plan.coach_move_cents).toBeGreaterThan(0);
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'coach' });
+    expect(text).toMatch(/paid off by/);
+    writeFileSync('/tmp/st360_payoff.txt', JSON.stringify({ plan, rows: rows.map(r => [r.account_type, r.payoff_month, r.coach_payoff_month, r.interest_cents, r.coach_interest_cents]) }, null, 1) + '\n' + text);
+  }, 60_000);
+});

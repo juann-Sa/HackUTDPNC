@@ -455,6 +455,40 @@ export const dangerDay = table(
   }
 );
 
+// ---------- debt payoff: when each debt clears now vs with the coach's plan ----------
+export const debtPayoff = table(
+  { name: 'debt_payoff', public: true },
+  {
+    account_id: t.string().primaryKey(),
+    customer_id: t.string().index('btree'),
+    account_type: t.string(),
+    balance_cents: t.f64(),
+    apr_pct: t.f64(),
+    monthly_payment_cents: t.f64(),
+    payoff_months: t.option(t.u32()), // none: not paid off within 40 years at today's pace
+    payoff_month: t.option(t.string()), // YYYY-MM
+    interest_cents: t.f64(),
+    coach_payoff_months: t.option(t.u32()),
+    coach_payoff_month: t.option(t.string()),
+    coach_interest_cents: t.f64(),
+  }
+);
+
+export const debtPlan = table(
+  { name: 'debt_plan', public: true },
+  {
+    customer_id: t.string().primaryKey(),
+    consumer_free_month: t.option(t.string()), // all debt except the mortgage paid off (YYYY-MM)
+    coach_consumer_free_month: t.option(t.string()),
+    all_free_month: t.option(t.string()),
+    coach_all_free_month: t.option(t.string()),
+    total_interest_cents: t.f64(),
+    coach_total_interest_cents: t.f64(),
+    interest_saved_cents: t.f64(),
+    coach_move_cents: t.f64(),
+  }
+);
+
 // ---------- goals: chance of reaching a money target by a date ----------
 export const goal = table(
   { name: 'goal', public: true },
@@ -532,6 +566,8 @@ const spacetimedb = schema({
   backtestOverall,
   goal,
   goalResult,
+  debtPayoff,
+  debtPlan,
   dangerDay,
   timelineWhatif,
   qa,

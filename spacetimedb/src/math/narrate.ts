@@ -89,6 +89,9 @@ export const FACT_TERMS: Record<string, string[]> = {
   ask_cash: ['cash'],
   ask_risk: ['chance', 'risk', 'below', 'drop', 'odds'],
   ask_low: ['lowest', 'low', 'dip', 'bottom', 'point'],
+  debt_free: ['debt', 'paid off', 'pay off', 'free', 'clear', 'mortgage'],
+  interest_saved: ['interest', 'save', 'saving'],
+  debt_stuck: ['shrink', 'balance', 'card', 'loan', 'debt'],
   goal: ['goal', 'chance', 'reach', 'save', 'month', 'target', 'by', 'raise', 'cash'],
 };
 
@@ -186,7 +189,7 @@ export function templateText(topic: string, facts: Fact[]): string {
     overview: ['net_cash_today', 'organic_6m', 'external_6m', 'continue_180', 'coach_180', 'top_risk', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim'],
     past: ['income_6m', 'spending_6m', 'debt_interest_6m', 'external_6m', 'organic_6m'],
     future: ['continue_180', 'coach_180', 'coach_gain', 'band_note', 'danger'],
-    coach: ['action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
+    coach: ['debt_free', 'interest_saved', 'debt_stuck', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
     goals: ['goal'],
     risk: ['p_low', 'danger', 'es_worst', 'top_risk', 'dip', 'stress_job_loss', 'stress_bill', 'top_lever', 'runway'],
   };
