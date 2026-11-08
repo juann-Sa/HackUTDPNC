@@ -131,7 +131,8 @@ export const ANSWER_TOPIC = (q: string) =>
   `Answer the customer's question in two to four sentences using only the facts that bear on it; if the facts do not answer it, say what you can and what is not known. The question was: "${q}"`;
 
 export const ANSWER_ASK =
-  'Answer the customer\'s question using only these facts. Start with the verdict in plain words, then the two or three numbers that matter most, then one practical tip.';
+  'Answer the customer\'s question using only these facts. Start with the verdict in plain words, then the two or three numbers that answer what they actually asked ' +
+  '(the facts are listed most relevant first: for a purchase or loan, the monthly payment and the emergency cushion), then one practical tip.';
 
 /** Run a parsed question against the baseline (same random draws) and build the facts for the answer. */
 export function evaluateQuestion(
@@ -181,6 +182,8 @@ export function evaluateQuestion(
   const facts: Fact[] = [
     { key: 'ask_scenario', text: `Scenario checked: ${interpretation}` },
     { key: 'ask_verdict', text: `Verdict from the bank's rules: ${v}` },
+  ];
+  const general: Fact[] = [
     { key: 'ask_cash', text: `Cash in 180 days: about ${usd(baseRun.endLiquid.p50)} if nothing changes, about ${usd(whatIf.endLiquid.p50)} with this change` },
     { key: 'ask_risk', text: `Chance cash drops below ${usd(a.thresholdCents)} in the next 180 days: ${pct(baseRun.pLow)} now, ${pct(whatIf.pLow)} with this change` },
     { key: 'ask_low', text: `Lowest likely cash point with this change (only a 1-in-20 chance of lower): ${usd(lowest)}` },
@@ -200,6 +203,7 @@ export function evaluateQuestion(
     if (!pu.aprGiven || !pu.termGiven)
       facts.push({ key: 'ask_assumed', text: `Assumed loan terms where you didn't say: ${pu.aprPct}% interest, ${pu.termMonths} months` });
   }
+  facts.push(...general);
   const nextDanger = whatIf.danger.find(d => d.pBelow >= 0.1);
   if (nextDanger)
     facts.push({ key: 'danger', text: `Next day your checking could dip below ${usd(a.dangerThresholdCents)} with this change: ${nextDanger.date} (${pct(nextDanger.pBelow, 0)} chance)` });

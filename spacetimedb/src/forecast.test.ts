@@ -270,3 +270,19 @@ describe('snowball vs avalanche', () => {
     expect(sn.totalInterest).toBeCloseTo(simulatePayoff([debts[2]], 0, true, 'snowball').totalInterest, 0);
   });
 });
+
+describe('number audit spacing', () => {
+  it('accepts "0.3 %" (space or no-break space before %) as 0.3%', () => {
+    const facts = [{ key: 'ask_risk', text: 'Chance cash drops below $500 in the next 180 days: 0.0% now, 0.3% with this change' }];
+    expect(auditReply('The chance your cash drops below $500 rises to 0.3 % with this change.', facts).ok).toBe(true);
+    expect(auditReply('The chance your cash drops below $500 rises to 0.3 % with this change.', facts).ok).toBe(true);
+    expect(auditReply('The chance your cash drops below $500 rises to 4.3 % with this change.', facts).ok).toBe(false);
+  });
+  it('purchase facts come right after the verdict', () => {
+    const { ledger, accounts } = customer('C006');
+    const s = buildSchedule(ledger, accounts, '2026-10-31', 180);
+    const p = parseScenario('{"supported": true, "purchase_kind": "car", "purchase_price_cents": 3000000, "down_payment_cents": 500000}');
+    const ev = evaluateQuestion(s, 503699, p, seedFromString('C006'), { ...DEFAULT_ASSUMPTIONS, pairs: 60 }, { incomeCents: 419905, debtPaymentsCents: 217218 });
+    expect(ev.facts.map(f => f.key).slice(0, 4)).toEqual(['ask_scenario', 'ask_verdict', 'ask_payment', 'ask_cushion']);
+  });
+});

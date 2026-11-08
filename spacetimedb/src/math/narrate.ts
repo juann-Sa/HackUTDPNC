@@ -19,6 +19,8 @@ const FREE_NUMBERS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
 
 const NUM_RE = /-?\$?\d[\d,]*(?:\.\d+)?%?/g;
 const norm = (tok: string) => tok.replace(/[$,]/g, '').replace(/^-/, '');
+/** "0.3 %" (with a normal, no-break or thin space, as models often write) counts as "0.3%". */
+const joinPercent = (text: string) => text.replace(/(\d)[ \u00a0\u202f\u2009]+%/g, '$1%');
 
 export function allowedNumbers(facts: Fact[]): Set<string> {
   const s = new Set(FREE_NUMBERS);
@@ -115,6 +117,7 @@ export interface Audit {
 
 /** Check a reply: every number must come from a fact (or honestly round one) and keep that fact's label. */
 export function auditReply(text: string, facts: Fact[]): Audit {
+  text = joinPercent(text);
   const unverified: string[] = [];
   const mislabeled: { tok: string; label: string }[] = [];
   const spelled = SPELLED.test(text);
@@ -155,6 +158,7 @@ export function auditReply(text: string, facts: Fact[]): Audit {
 
 /** Numbers in `text` that are neither in the facts nor an honest rounding of one (label not checked). */
 export function unverifiedNumbers(text: string, facts: Fact[]): string[] {
+  text = joinPercent(text);
   const ok = allowedNumbers(facts);
   const bad: string[] = [];
   for (const m of text.match(NUM_RE) ?? []) {

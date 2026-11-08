@@ -222,7 +222,8 @@ const median = (xs: number[]) => { const s = xs.filter(Number.isFinite).sort((a,
 const pctOf = (xs: boolean[]) => (xs.length ? (100 * xs.filter(Boolean).length) / xs.length : NaN);
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : NaN);
 
-export function summarizeLevels(rows: LevelRow[]) {
+export function summarizeLevels(all: LevelRow[]) {
+  const rows = all.filter(r => !r.error);
   const keys = [...new Set(rows.map(r => `${r.level}|${r.model}`))];
   // (level names contain no '|')
   return keys.map(k => {
@@ -249,7 +250,8 @@ export function summarizeLevels(rows: LevelRow[]) {
 
 /** "Best" = the cheapest/fastest level that is fully reliable: highest verdict accuracy and clean-number rate first,
  *  then lower cost, then lower latency. Returns the ranking with a one-line reason. */
-export function rankLevels(rows: LevelRow[]) {
+export function rankLevels(all: LevelRow[]) {
+  const rows = all.filter(r => !r.error);
   const byLevel = LEVELS.map(level => {
     const rs = rows.filter(r => r.level === level);
     if (!rs.length) return null;
@@ -298,6 +300,7 @@ export function levelsMarkdown(rows: LevelRow[], meta: { date: string; customer:
     ...rank.map((x, i) => `${i + 1}. ${LEVEL_NAMES[x.level]}: ${f(x.accuracy)}% fully reliable answers, ~${money(x.cost)} and ${f(x.seconds, 1)} s per question`),
     '',
     best ? `**Best: ${LEVEL_NAMES[best.level]}.**` : '',
+    ...(rows.some(r => r.error) ? ['', `Left out of the tables: ${rows.filter(r => r.error).length} answers whose model call failed (${[...new Set(rows.filter(r => r.error).map(r => `${r.model}: ${r.error.slice(0, 80)}`))].join('; ')}).`] : []),
     '',
     '- **Level 1**: one call; the model gets the raw data and does its own math. **Level 2**: the model picks approved tools (accounts, health metrics, the forecast engine) and writes the answer from their results. **Level 3**: an LLM only reads the question into parameters; code validates them, the engine computes, an LLM explains, and the number audit checks the answer (+1 retry, else a template). **+ critic**: adds a supervisor LLM and a reviewer LLM.',
     '- **Question read right**: the scenario parameters the model produced (Level 3) or passed to the simulator (Level 2) match the question (e.g. $30,000 car, $5,000 down).',

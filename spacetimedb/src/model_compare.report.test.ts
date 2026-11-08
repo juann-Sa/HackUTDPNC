@@ -12,10 +12,18 @@ import { DEFAULT_MODELS, PRICES, PRIVACY_NOTE, QUESTIONS, compareModels, groqCha
 it.skipIf(!process.env.GROQ_API_KEY || !process.env.COMPARE_OUT)('compare Groq models on the coach pipeline', async () => {
   const out = process.env.COMPARE_OUT!;
   const cid = process.env.COMPARE_CUSTOMER ?? 'C006';
-  const models = (process.env.COMPARE_MODELS ?? DEFAULT_MODELS.join(',')).split(',').map(m => m.trim()).filter(Boolean);
+  const chat = groqChat(process.env.GROQ_API_KEY!);
+  const wanted = (process.env.COMPARE_MODELS ?? DEFAULT_MODELS.join(',')).split(',').map(m => m.trim()).filter(Boolean);
+  const models: string[] = [];
+  for (const m of wanted) {
+    const probe = await chat(m, [{ role: 'user', content: 'Reply with OK.' }], false);
+    if (probe.error) console.log(`skipping ${m}: ${probe.error}`);
+    else models.push(m);
+  }
+  if (!models.length) throw new Error('No usable models for this key');
   const { schedule, outflowCents } = loadCustomer(cid);
   const rows = await compareModels({
-    models, chat: groqChat(process.env.GROQ_API_KEY!), schedule, outflowCents, seed: seedFromString(cid),
+    models, chat, schedule, outflowCents, seed: seedFromString(cid),
     assumptions: { ...DEFAULT_ASSUMPTIONS, pairs: 200 }, asOf: AS_OF,
     onRow: r => console.log(`${r.model} | ${r.question} | json=${r.parse.validJson} correct=${r.parse.correct} audit=${r.answer?.finalPass ?? '-'} ${r.parse.error}`),
   });
