@@ -11,7 +11,7 @@ import { computeDailyAccountTotal, computeDailyLiquid } from './math/daily';
 import { dayNumber, isoFromDayNumber } from './math/dates';
 import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR, LIQUID_TYPES } from './math/book';
 import { SHRINK_K, buildSchedule } from './math/schedule';
-import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
+import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type NewLoan, type Scenario, amortizedPayment, habitAssumptions, makeTapes, runForecast } from './math/forecast';
 import { RISK_CAP, analyze, sourceLabel } from './math/coach';
 import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
@@ -637,6 +637,36 @@ function writeWhatifLine(ctx: Ctx, cid: string, f: ForecastResult, label: string
   );
 }
 
+function writeFutureScenario(
+  ctx: Ctx,
+  cid: string,
+  scenarioType: 'coach' | 'user',
+  scenario: unknown,
+  forecast: ForecastResult,
+  label: string,
+) {
+  const scenarioId = `${cid}|${scenarioType}`;
+  const row = {
+    scenario_id: scenarioId,
+    customer_id: cid,
+    scenario_type: scenarioType,
+    label,
+    scenario_json: JSON.stringify(scenario),
+    forecast_json: JSON.stringify(forecast.netCashBands.map((band, dayOffset) => ({
+      day_offset: dayOffset,
+      date: forecast.dates[dayOffset],
+      low_cents: round(band.p5),
+      mid_cents: round(band.p50),
+      high_cents: round(band.p95),
+      label,
+    }))),
+    updated_at: ctx.timestamp,
+  };
+  const existing = ctx.db.futureScenario.scenario_id.find(scenarioId);
+  if (existing) ctx.db.futureScenario.scenario_id.update(row);
+  else ctx.db.futureScenario.insert(row);
+}
+
 const CategoryMult = t.object('CategoryMult', { category: t.string(), mult: t.f64() });
 
 /** What-if simulator: one custom scenario on the same random draws as the baseline (shared live). */
@@ -651,26 +681,84 @@ export const run_what_if = spacetimedb.reducer(
     move_to_debt_cents: t.f64(),
     job_loss_months: t.u32(),
     card_apr_bump_pct: t.f64(),
+    purchase_kind: t.string(),
+    purchase_price_cents: t.f64(),
+    down_payment_cents: t.f64(),
+    loan_apr_pct: t.f64(),
+    loan_term_months: t.u32(),
+    purchase_in_days: t.u32(),
   },
   (ctx, args) => {
     const { schedule } = scheduleFor(ctx, args.customer_id);
     const a = DEFAULT_ASSUMPTIONS;
     const tapes = makeTapes(seedFromString(args.customer_id), a, schedule.months.length + 1);
+    const purchaseKind = args.purchase_kind === 'car' || args.purchase_kind === 'home' ? args.purchase_kind : 'other';
+    const purchasePrice = Math.max(0, Math.min(200_000_000, args.purchase_price_cents));
+    const purchaseDown = Math.max(0, Math.min(purchasePrice, args.down_payment_cents));
+    const purchaseApr = Math.max(0, Math.min(36, args.loan_apr_pct));
+    const purchaseTerm = Math.max(6, Math.min(360, args.loan_term_months));
+    const newLoan: NewLoan | undefined = purchasePrice > 0
+      ? {
+          dayIndex: Math.min(args.purchase_in_days, a.horizonDays - 1),
+          downCents: purchaseDown,
+          principalCents: purchasePrice - purchaseDown,
+          aprPct: purchaseApr,
+          paymentCents: Math.round(amortizedPayment(purchasePrice - purchaseDown, purchaseApr, purchaseTerm)),
+          label: purchaseKind === 'other' ? 'purchase' : purchaseKind,
+        }
+      : undefined;
     const sc: Scenario = {
       id: 'what_if',
       label: 'What if',
       includeExternal: args.include_external,
-      incomeMult: args.income_mult,
-      categoryMult: Object.fromEntries(args.category_mults.map(c => [c.category, c.mult])),
-      oneOff: args.one_off_cents > 0 ? { dayIndex: Math.min(args.one_off_day, a.horizonDays - 1), cents: args.one_off_cents } : undefined,
-      moveToDebtCents: args.move_to_debt_cents,
-      jobLossMonths: args.job_loss_months,
-      cardAprBumpPct: args.card_apr_bump_pct,
+      incomeMult: Math.max(0, Math.min(1.5, args.income_mult)),
+      categoryMult: Object.fromEntries(args.category_mults.map(c => [
+        c.category,
+        Math.max(0, Math.min(3, c.mult)),
+      ])),
+      oneOff: args.one_off_cents > 0 ? {
+        dayIndex: Math.min(args.one_off_day, a.horizonDays - 1),
+        cents: Math.min(100_000_000, args.one_off_cents),
+      } : undefined,
+      moveToDebtCents: Math.max(0, Math.min(100_000_000, args.move_to_debt_cents)),
+      jobLossMonths: Math.max(0, Math.min(6, args.job_loss_months)),
+      cardAprBumpPct: Math.max(0, Math.min(36, args.card_apr_bump_pct)),
+      newLoan,
     };
     writeForecast(ctx, args.customer_id, runForecast(schedule, a, sc, tapes), a);
     // third line on the 360° chart: same habit view and net-cash measure as the other two lines
     const h = habitAssumptions(a);
-    writeWhatifLine(ctx, args.customer_id, runForecast(schedule, h, sc, makeTapes(seedFromString(args.customer_id), h, schedule.months.length + 1)), 'Your what-if');
+    const userForecast = runForecast(schedule, h, sc, makeTapes(seedFromString(args.customer_id), h, schedule.months.length + 1));
+    writeWhatifLine(ctx, args.customer_id, userForecast, 'Your slider scenario');
+    writeFutureScenario(ctx, args.customer_id, 'user', {
+      incomeMult: sc.incomeMult,
+      categoryMult: sc.categoryMult,
+      oneOffCents: sc.oneOff?.cents ?? 0,
+      oneOffInDays: sc.oneOff?.dayIndex ?? 30,
+      moveToDebtCents: sc.moveToDebtCents,
+      jobLossMonths: sc.jobLossMonths,
+      cardAprBumpPct: sc.cardAprBumpPct,
+      purchase: args.purchase_price_cents > 0 ? {
+        kind: purchaseKind,
+        priceCents: purchasePrice,
+        downCents: purchaseDown,
+        aprPct: purchaseApr,
+        termMonths: purchaseTerm,
+        inDays: Math.min(args.purchase_in_days, a.horizonDays - 1),
+      } : undefined,
+      summary: 'Your chosen slider scenario',
+    }, userForecast, 'Your slider scenario');
+  }
+);
+
+export const clear_user_future_scenario = spacetimedb.reducer(
+  { customer_id: t.string() },
+  (ctx, { customer_id }) => {
+    const scenarioId = `${customer_id}|user`;
+    if (ctx.db.futureScenario.scenario_id.find(scenarioId))
+      ctx.db.futureScenario.scenario_id.delete(scenarioId);
+    for (const row of [...ctx.db.timelineWhatif.customer_id.filter(customer_id)])
+      ctx.db.timelineWhatif.whatif_id.delete(row.whatif_id);
   }
 );
 
@@ -1073,13 +1161,18 @@ export const ask = spacetimedb.procedure(
       return `No data for ${cid} yet.`;
     }
     const { key, model } = groqEnv(ctx);
-    const record = (row: { interpretation: string; supported: boolean; verdict: string; answer: string; source: string; rejected: string }) =>
-      ctx.withTx(tx =>
-        tx.db.qa.insert({
+    const record = (
+      row: { interpretation: string; supported: boolean; verdict: string; answer: string; source: string; rejected: string; scenario?: string },
+      updateScenario?: (tx: Ctx) => void,
+    ) =>
+      ctx.withTx(tx => {
+        updateScenario?.(tx);
+        return tx.db.qa.insert({
           qa_id: 0n, customer_id: cid, question: q, interpretation: row.interpretation, supported: row.supported,
-          verdict: row.verdict, answer: row.answer, source: row.source, rejected_reason: row.rejected, created_at: tx.timestamp,
-        })
-      );
+          verdict: row.verdict, answer: row.answer, source: row.source, rejected_reason: row.rejected,
+          scenario_json: row.scenario, created_at: tx.timestamp,
+        });
+      });
     if (!key) {
       const msg = 'Questions need the AI connection (GROQ_API_KEY). Use the what-if controls instead.';
       record({ interpretation: '', supported: false, verdict: '', answer: msg, source: 'template', rejected: 'no GROQ_API_KEY set' });
@@ -1114,12 +1207,22 @@ export const ask = spacetimedb.procedure(
     const ev = evaluateQuestion(prep.schedule, prep.outflow, p, seedFromString(cid), DEFAULT_ASSUMPTIONS, { incomeCents: prep.income, debtPaymentsCents: prep.debtPayments });
     const r = explainWithAudit(ctx, ev.facts, `${ANSWER_ASK} The question was: "${q}"`, ev.fallback);
 
-    // 4) store: the what-if forecast, the third chart line, and the Q&A
-    ctx.withTx(tx => {
+    // Store the AI scenario and its Q&A together so the graph always matches the answer.
+    record({
+      interpretation: ev.interpretation,
+      supported: true,
+      verdict: ev.verdict,
+      answer: r.text,
+      source: r.source,
+      rejected: r.rejected,
+      scenario: JSON.stringify(p),
+    }, tx => {
       writeForecast(tx, cid, ev.whatIf, DEFAULT_ASSUMPTIONS);
       writeWhatifLine(tx, cid, ev.habit, ev.interpretation.slice(0, 80));
+      writeFutureScenario(tx, cid, 'coach', p, ev.habit, ev.interpretation.slice(0, 80));
+      const previousUserScenario = tx.db.futureScenario.scenario_id.find(`${cid}|user`);
+      if (previousUserScenario) tx.db.futureScenario.scenario_id.delete(previousUserScenario.scenario_id);
     });
-    record({ interpretation: ev.interpretation, supported: true, verdict: ev.verdict, answer: r.text, source: r.source, rejected: r.rejected });
     return r.text;
   }
 );

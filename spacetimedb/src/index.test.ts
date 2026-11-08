@@ -250,21 +250,45 @@ describe('SpaceTime 360 forecast reducers', () => {
       m.run_what_if(ctx, {
         customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: 0,
         one_off_day: 0, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        purchase_kind: '', purchase_price_cents: 0, down_payment_cents: 0, loan_apr_pct: 7.5, loan_term_months: 60, purchase_in_days: 30,
       })
     );
     const base = test.db.forecastRun.run_id.find('C006|baseline')!;
     const wi = test.db.forecastRun.run_id.find('C006|what_if')!;
     expect(wi.p_low).toBe(base.p_low);
     expect(wi.end_liquid_p50_cents).toBe(base.end_liquid_p50_cents);
+    const neutralScenario = test.db.futureScenario.scenario_id.find('C006|user')!;
+    const neutralForecast = JSON.parse(neutralScenario.forecast_json) as { day_offset: number; mid_cents: number }[];
+    expect(neutralForecast).toHaveLength(181);
     test.withReducerTx(stranger, ctx =>
       m.run_what_if(ctx, {
         customer_id: 'C006', include_external: false, income_mult: 1,
         category_mults: [{ category: 'dining', mult: 0.5 }], one_off_cents: 0, one_off_day: 0,
         move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        purchase_kind: '', purchase_price_cents: 0, down_payment_cents: 0, loan_apr_pct: 7.5, loan_term_months: 60, purchase_in_days: 30,
       })
     );
     const cut = test.db.forecastRun.run_id.find('C006|what_if')!;
     expect(cut.end_liquid_p50_cents).toBeGreaterThan(base.end_liquid_p50_cents);
+    const savedCut = test.db.futureScenario.scenario_id.find('C006|user')!;
+    expect(JSON.parse(savedCut.scenario_json).categoryMult.dining).toBe(0.5);
+
+    test.withReducerTx(stranger, ctx =>
+      m.run_what_if(ctx, {
+        customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: 0,
+        one_off_day: 0, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        purchase_kind: 'car', purchase_price_cents: 3_000_000, down_payment_cents: 500_000,
+        loan_apr_pct: 7.5, loan_term_months: 60, purchase_in_days: 30,
+      })
+    );
+    const purchaseForecast = JSON.parse(
+      test.db.futureScenario.scenario_id.find('C006|user')!.forecast_json,
+    ) as { day_offset: number; mid_cents: number }[];
+    expect(purchaseForecast.find(point => point.day_offset === 31)!.mid_cents)
+      .toBeLessThan(neutralForecast.find(point => point.day_offset === 31)!.mid_cents);
+
+    test.withReducerTx(stranger, ctx => m.clear_user_future_scenario(ctx, { customer_id: 'C006' }));
+    expect(test.db.futureScenario.scenario_id.find('C006|user')).toBeNull();
   });
 });
 
@@ -549,13 +573,14 @@ describe('ask procedure and the what-if line', () => {
       test.withReducerTx(stranger, ctx => m.run_what_if(ctx, {
         customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: oneOff,
         one_off_day: 30, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        purchase_kind: '', purchase_price_cents: 0, down_payment_cents: 0, loan_apr_pct: 7.5, loan_term_months: 60, purchase_in_days: 30,
       }));
       return [...test.db.timelineWhatif.customer_id.filter('C006')].sort((a, b) => a.day_offset - b.day_offset);
     };
     const none = line(0);
     const trip = line(200_000);
     expect(trip.length).toBe(181);
-    expect(trip[0].label).toBe('Your what-if');
+    expect(trip[0].label).toBe('Your slider scenario');
     // same random draws: the $2,000 trip shows up as almost exactly $2,000 less by the end
     expect(Math.abs(none[180].mid_cents - trip[180].mid_cents - 200_000)).toBeLessThan(10_000);
   }, 60_000);
