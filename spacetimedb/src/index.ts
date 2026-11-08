@@ -366,6 +366,7 @@ export const run_forecast = spacetimedb.reducer(
     const debts = debtsFromSchedule(schedule);
     const now = simulatePayoff(debts, 0, false);
     const plan = simulatePayoff(debts, move, true);
+    const snow = simulatePayoff(debts, move, true, 'snowball');
     const asOfIso = schedule.asOf;
     const monthOf = (n: number | undefined) => (n === undefined ? undefined : addMonths(asOfIso, n));
     for (const r of [...ctx.db.debtPayoff.customer_id.filter(cid)]) ctx.db.debtPayoff.account_id.delete(r.account_id);
@@ -376,6 +377,7 @@ export const run_forecast = spacetimedb.reducer(
         monthly_payment_cents: round(d.monthlyPayment), payoff_months: d.months, payoff_month: monthOf(d.months),
         interest_cents: round(d.interest), coach_payoff_months: c.months, coach_payoff_month: monthOf(c.months),
         coach_interest_cents: round(c.interest),
+        snowball_payoff_months: snow.debts[i].months, snowball_payoff_month: monthOf(snow.debts[i].months),
       });
     });
     if (ctx.db.debtPlan.customer_id.find(cid)) ctx.db.debtPlan.customer_id.delete(cid);
@@ -389,6 +391,9 @@ export const run_forecast = spacetimedb.reducer(
       coach_total_interest_cents: round(plan.totalInterest),
       interest_saved_cents: round(now.totalInterest - plan.totalInterest),
       coach_move_cents: move,
+      snowball_consumer_free_month: monthOf(snow.consumerMonths),
+      snowball_total_interest_cents: round(snow.totalInterest),
+      snowball_extra_interest_cents: round(snow.totalInterest - plan.totalInterest),
     });
 
     // Danger days from the baseline (life events included).
@@ -626,6 +631,9 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
     const stuck = [...ctx.db.debtPayoff.customer_id.filter(cid)].filter(d => d.payoff_months === undefined && d.account_type !== 'mortgage');
     if (dp.interest_saved_cents > 0)
       add('interest_saved', `Interest saved over the life of your debts with the coach's plan: ${usd(dp.interest_saved_cents)}${stuck.length ? ' (a balance that never shrinks is counted for up to 40 years)' : ''}`);
+    const extra = dp.snowball_extra_interest_cents;
+    const vs = Math.abs(extra) < 100 ? "about the same interest as the coach's plan" : extra > 0 ? `${usd(extra)} more interest than the coach's plan` : `${usd(-extra)} less interest than the coach's plan`;
+    add('snowball', `Paying the smallest balance first (snowball) instead: debt other than the mortgage paid off by ${mon(dp.snowball_consumer_free_month)}, with ${vs}`);
     if (stuck.length) add('debt_stuck', `Not shrinking at today's payments: ${stuck.map(d => d.account_type.replace('_', ' ')).join(', ')}`);
   }
   return f;

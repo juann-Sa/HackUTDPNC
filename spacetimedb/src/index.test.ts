@@ -526,8 +526,10 @@ describe('debt payoff tables', () => {
     const plan = test.db.debtPlan.customer_id.find('C006')!;
     expect(plan.interest_saved_cents).toBeGreaterThan(0);
     expect(plan.coach_move_cents).toBeGreaterThan(0);
+    expect(plan.snowball_consumer_free_month).toBeDefined();
+    expect(rows.every(r => 'snowball_payoff_month' in r)).toBe(true);
     const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'coach' });
     expect(text).toMatch(/paid off by/);
-    writeFileSync('/tmp/st360_payoff.txt', JSON.stringify({ plan, rows: rows.map(r => [r.account_type, r.payoff_month, r.coach_payoff_month, r.interest_cents, r.coach_interest_cents]) }, null, 1) + '\n' + text);
+    writeFileSync('/tmp/st360_payoff_snow.txt', JSON.stringify({ plan, rows: rows.map(r => [r.account_type, r.payoff_month, r.coach_payoff_month, r.snowball_payoff_month, r.interest_cents, r.coach_interest_cents]) }, null, 1) + '\n' + text);
   }, 60_000);
 });
