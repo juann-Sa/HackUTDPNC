@@ -1,7 +1,7 @@
 // End-to-end check of the module math against the independent Python reference
 // (analytics/reference/book_reference.py → reference.json), on all 100 customers.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConnectionId } from 'spacetimedb';
@@ -183,14 +183,31 @@ describe('SpaceTime 360 forecast reducers', () => {
   const { test } = loadedHarness();
   test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
 
-  it('writes five scenarios with 181 days of bands each', () => {
+  it('writes seven scenarios with 181 days of bands each', () => {
     const runs = [...test.db.forecastRun.customer_id.filter('C006')].map(r => r.scenario).sort();
-    expect(runs).toEqual(['baseline', 'coach', 'stress_bill', 'stress_job_loss', 'stress_rates']);
+    expect(runs).toEqual(['baseline', 'coach', 'habit_coach', 'habit_continue', 'stress_bill', 'stress_job_loss', 'stress_rates']);
     for (const sc of runs) {
       const bands = [...test.db.forecastBand.customer_id.filter('C006')].filter(b => b.scenario === sc);
       expect(bands.length).toBe(181);
       for (const b of bands) expect(b.p5_cents <= b.p50_cents && b.p50_cents <= b.p95_cents).toBe(true);
     }
+  });
+
+  it('builds the 360° timeline: 180 days of history, two tight future paths on net cash', () => {
+    const rows = [...test.db.timeline360.customer_id.filter('C006')].sort((a, b) => a.day_offset - b.day_offset);
+    expect(rows.length).toBe(361);
+    expect(rows[0].day_offset).toBe(-180);
+    expect(rows.filter(r => r.actual_net_cash_cents !== undefined).length).toBe(181);
+    const today = rows.find(r => r.day_offset === 0)!;
+    // both paths start exactly at today's actual net cash (moving cash onto debt is neutral)
+    expect(today.continue_mid_cents).toBe(today.actual_net_cash_cents);
+    expect(today.coach_mid_cents).toBe(today.actual_net_cash_cents);
+    const end = rows[rows.length - 1];
+    expect(end.coach_mid_cents!).toBeGreaterThan(end.continue_mid_cents!);
+    const band = (end.continue_high_cents! - end.continue_low_cents!) / 2;
+    // band width in dollars, relative to the cash it describes (net cash itself can be near zero)
+    expect(band / today.actual_liquid_cents!).toBeLessThan(0.05);
+    writeFileSync('/tmp/st360_timeline.txt', `C006 day 180 net cash: continue ${end.continue_mid_cents} ± ${band.toFixed(0)} | coach ${end.coach_mid_cents} | today ${today.actual_net_cash_cents}`);
   });
 
   it('coach move equals the carry table fixable leak (same 3-month buffer)', () => {

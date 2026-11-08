@@ -41,6 +41,14 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   iraSigma: 0.15,
 };
 
+/**
+ * "Habit" view: only normal month-to-month variation in income and spending, no rare bills and no
+ * job loss. Answers "if you keep spending like this"; life events are shown separately as stress tests.
+ */
+export function habitAssumptions(a: Assumptions): Assumptions {
+  return { ...a, jumpsPerYear: 0, pEmployedToJobLoss: 0 };
+}
+
 export interface Scenario {
   id: string;
   label: string;
@@ -115,6 +123,8 @@ function dayShare(events: Calendar['events'][number], cat: Category, usualDay: n
 
 export interface PathResult {
   liquid: Float64Array; // day 0..H
+  /** liquid − high-cost debt (APR ≥ 10%): neutral to moving cash onto that debt */
+  netCash: Float64Array;
   endNetWorth: number;
   dev: Float64Array; // per SOURCES
 }
@@ -126,6 +136,7 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
   const H = a.horizonDays;
   const K = CATEGORIES.length;
   const liquid = new Float64Array(H + 1);
+  const netCash = new Float64Array(H + 1);
   const dev = new Float64Array(SOURCES.length);
   const incomeMult = sc.incomeMult ?? 1;
   const catMult = CATEGORIES.map(c => sc.categoryMult?.[c] ?? 1);
@@ -135,6 +146,9 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
   const cardApr = (s.card?.aprPct ?? 0) + (sc.cardAprBumpPct ?? 0);
   const loanBal = s.loans.map(l => l.balance);
   const lockedBal = s.locked.map(l => l.balance);
+  const highCostDebt = () =>
+    ((s.card && s.card.aprPct >= 10) ? cardBal : 0) +
+    s.loans.reduce((p, l, i) => p + (l.aprPct >= 10 ? Math.max(loanBal[i], 0) : 0), 0);
 
   // t0 move: cash to high-cost debt, highest APR first
   let move = Math.min(sc.moveToDebtCents ?? 0, Math.max(x, 0));
@@ -152,6 +166,7 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
     x -= move;
   }
   liquid[0] = x;
+  netCash[0] = x - highCostDebt();
 
   let employed = true;
   const e = new Float64Array(K); // AR spending log-shocks
@@ -263,9 +278,10 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
       });
     }
     liquid[k + 1] = x;
+    netCash[k + 1] = x - highCostDebt();
   }
   const endNetWorth = x + lockedBal.reduce((p, v) => p + v, 0) - cardBal - loanBal.reduce((p, v) => p + Math.max(v, 0), 0);
-  return { liquid, endNetWorth, dev };
+  return { liquid, netCash, endNetWorth, dev };
 }
 
 export function quantile(sorted: Float64Array | number[], p: number): number {
@@ -281,6 +297,8 @@ export interface ForecastResult {
   scenario: Scenario;
   dates: string[];
   bands: { p5: number; p25: number; p50: number; p75: number; p95: number }[]; // day 0..H
+  /** bands of liquid − high-cost debt (used for the continue-vs-coach comparison) */
+  netCashBands: { p5: number; p50: number; p95: number }[];
   pLow: number;
   pLowSe: number;
   var95: number;
@@ -310,6 +328,12 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
     for (let i = 0; i < N; i++) col[i] = paths[i].liquid[d];
     col.sort();
     bands.push({ p5: quantile(col, 0.05), p25: quantile(col, 0.25), p50: quantile(col, 0.5), p75: quantile(col, 0.75), p95: quantile(col, 0.95) });
+  }
+  const netCashBands: ForecastResult['netCashBands'] = [];
+  for (let d = 0; d <= H; d++) {
+    for (let i = 0; i < N; i++) col[i] = paths[i].netCash[d];
+    col.sort();
+    netCashBands.push({ p5: quantile(col, 0.05), p50: quantile(col, 0.5), p95: quantile(col, 0.95) });
   }
   const low = paths.map(p => (p.liquid.some(v => v < a.thresholdCents) ? 1 : 0));
   const pairMeans: number[] = [];
@@ -361,6 +385,7 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
     scenario: sc,
     dates: [isoFromDayNumber(dayNumber(s.asOf)), ...cal.iso],
     bands,
+    netCashBands,
     pLow,
     pLowSe,
     var95: -q05,

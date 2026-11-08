@@ -7,11 +7,11 @@ import { t, SenderError, type InferSchema, type ReducerCtx } from 'spacetimedb/s
 import spacetimedb, { account, customer, ledgerEntry, statement } from './schema';
 import { computeCarry, computeSnapshot } from './math/book';
 import { computePnl, computeSpending } from './math/pnl';
-import { computeDailyLiquid } from './math/daily';
+import { computeDailyAccountTotal, computeDailyLiquid } from './math/daily';
 import { dayNumber, isoFromDayNumber } from './math/dates';
-import { BUFFER_MONTHS } from './math/book';
+import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR } from './math/book';
 import { SHRINK_K, buildSchedule } from './math/schedule';
-import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, makeTapes, runForecast } from './math/forecast';
+import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
 import { RISK_CAP, analyze } from './math/coach';
 import { seedFromString } from './math/rng';
 
@@ -243,6 +243,43 @@ function writeForecast(ctx: Ctx, cid: string, f: ForecastResult, a: Assumptions)
     });
 }
 
+const PAST_DAYS = 180;
+
+function writeTimeline(ctx: Ctx, cid: string, cont: ForecastResult, coach: ForecastResult) {
+  for (const r of [...ctx.db.timeline360.customer_id.filter(cid)]) ctx.db.timeline360.timeline_id.delete(r.timeline_id);
+  const asOfDn = dayNumber(cont.dates[0]);
+  const start = isoFromDayNumber(asOfDn - PAST_DAYS);
+  const accts = [...ctx.db.account.customer_id.filter(cid)];
+  const highCost = new Set(
+    accts.filter(a => DEBT_TYPES.has(a.account_type) && a.apr_pct >= HIGH_COST_APR).map(a => a.account_id)
+  );
+  const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
+  const firstDate = ledger.reduce((m, t) => (t.posted_date < m ? t.posted_date : m), cont.dates[0]);
+  const debt = computeDailyAccountTotal(ledger, accts, highCost, firstDate, cont.dates[0]);
+  const liquid = new Map<string, number>();
+  for (const d of ctx.db.dailyLiquid.customer_id.filter(cid)) liquid.set(d.date, d.liquid_cents);
+  for (let off = -PAST_DAYS; off <= cont.bands.length - 1; off++) {
+    const date = isoFromDayNumber(asOfDn + off);
+    const past = off <= 0 && date >= start ? liquid.get(date) : undefined;
+    const c = off >= 0 ? cont.netCashBands[off] : undefined;
+    const k = off >= 0 ? coach.netCashBands[off] : undefined;
+    ctx.db.timeline360.insert({
+      timeline_id: `${cid}|${off}`,
+      customer_id: cid,
+      day_offset: off,
+      date,
+      actual_net_cash_cents: past !== undefined ? round(past - (debt.get(date) ?? 0)) : undefined,
+      actual_liquid_cents: past,
+      continue_low_cents: c ? round(c.p5) : undefined,
+      continue_mid_cents: c ? round(c.p50) : undefined,
+      continue_high_cents: c ? round(c.p95) : undefined,
+      coach_low_cents: k ? round(k.p5) : undefined,
+      coach_mid_cents: k ? round(k.p50) : undefined,
+      coach_high_cents: k ? round(k.p95) : undefined,
+    });
+  }
+}
+
 /** Full forward analysis for one customer: baseline, coach path, stresses, sensitivities, frontier. */
 export const run_forecast = spacetimedb.reducer(
   { customer_id: t.string(), include_external: t.bool() },
@@ -252,6 +289,15 @@ export const run_forecast = spacetimedb.reducer(
     const seed = seedFromString(cid);
     const an = analyze(schedule, a, seed, include_external, snap.monthly_outflow_cents);
     for (const f of [an.baseline, an.coach, ...an.stresses]) writeForecast(ctx, cid, f, a);
+
+    // Habit view: the two lines on the 360° chart, same random draws, life events off.
+    const h = habitAssumptions(a);
+    const tapes = makeTapes(seed, h, schedule.months.length + 1);
+    const habitContinue = runForecast(schedule, h, { ...an.baseline.scenario, id: 'habit_continue', label: 'If you continue like this' }, tapes);
+    const habitCoach = runForecast(schedule, h, { ...an.coach.scenario, id: 'habit_coach', label: 'If you follow the coach' }, tapes);
+    writeForecast(ctx, cid, habitContinue, h);
+    writeForecast(ctx, cid, habitCoach, h);
+    writeTimeline(ctx, cid, habitContinue, habitCoach);
 
     for (const r of [...ctx.db.sensitivity.customer_id.filter(cid)]) ctx.db.sensitivity.sensitivity_id.delete(r.sensitivity_id);
     for (const r of an.sensitivities)

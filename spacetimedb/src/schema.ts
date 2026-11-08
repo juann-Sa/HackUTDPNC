@@ -288,6 +288,31 @@ export const coachAction = table(
   }
 );
 
+/**
+ * One row per day from 180 days back to 180 days ahead: the 360° chart.
+ * Plotted metric is NET CASH = checking + savings − high-cost debt (APR ≥ 10%), so paying down
+ * expensive debt with cash is neutral on day 0 and the coach line wins only through real savings.
+ * Past rows: actual values. Future rows: two paths with habit bands (normal variation only,
+ * 5th–95th percentile): "continue" = if nothing changes, "coach" = following the coach.
+ */
+export const timeline360 = table(
+  { name: 'timeline_360', public: true },
+  {
+    timeline_id: t.string().primaryKey(), // customer_id|day_offset
+    customer_id: t.string().index('btree'),
+    day_offset: t.i32(), // -180 .. 180, 0 = as-of date
+    date: t.string(),
+    actual_net_cash_cents: t.option(t.f64()),
+    actual_liquid_cents: t.option(t.f64()),
+    continue_low_cents: t.option(t.f64()),
+    continue_mid_cents: t.option(t.f64()),
+    continue_high_cents: t.option(t.f64()),
+    coach_low_cents: t.option(t.f64()),
+    coach_mid_cents: t.option(t.f64()),
+    coach_high_cents: t.option(t.f64()),
+  }
+);
+
 /** Every number the forecast rests on, for the "how we calculated this" panel. */
 export const forecastAssumption = table(
   { name: 'forecast_assumption', public: true },
@@ -332,5 +357,6 @@ const spacetimedb = schema({
   frontierPoint,
   coachAction,
   forecastAssumption,
+  timeline360,
 });
 export default spacetimedb;
