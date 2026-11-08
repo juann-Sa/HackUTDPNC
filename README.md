@@ -839,7 +839,10 @@ PNC 360° is a student-built hackathon prototype.
 
 Built by students for **HackUTD 2026**.
 
-<!-- Add verified team member names and contributions here. -->
+Jie Cheong - Frontend Development
+Shivam Singh - Backend Development
+Juan Sanchez - Full stack Development
+Tu Le - Frontend Development
 
 ---
 
