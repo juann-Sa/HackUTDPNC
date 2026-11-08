@@ -10,9 +10,7 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  LedgerEntry,
-} from "./types";
+import { LedgerEntry } from "./types";
 
 export default {
   get rows() {

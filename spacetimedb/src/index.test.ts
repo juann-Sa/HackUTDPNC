@@ -173,6 +173,25 @@ describe('SpaceTime 360 book math', () => {
     }
   });
 
+  it('emits six historical months and six forecast months for the 180-day projection', () => {
+    test.withReducerTx(stranger, ctx => m.generate_180_day_projection(ctx, { customer_id: 'C001' }));
+    const rows = [...test.db.financialProjection.customer_id.filter('C001')];
+    const historical = rows.filter(row => row.record_type === 'historical');
+    const projected = rows
+      .filter(row => row.record_type === 'projected')
+      .sort((a, b) => a.month.localeCompare(b.month));
+
+    expect(historical).toHaveLength(6);
+    expect(projected.map(row => row.month)).toEqual([
+      '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04',
+    ]);
+    expect(projected[0].holiday_expense_spike).toBe(true);
+    expect(projected[0].monthly_expenses_cents).toBe(
+      Math.round(test.db.customer.customer_id.find('C001')!.monthly_non_debt_expenses_cents * 1.25)
+    );
+    expect(projected[1].holiday_expense_spike).toBe(false);
+  });
+
   it('only the owner can load data', () => {
     expect(() =>
       test.withReducerTx(stranger, ctx => m.reset_data(ctx, {}))
@@ -208,7 +227,6 @@ describe('SpaceTime 360 forecast reducers', () => {
     const band = (end.continue_high_cents! - end.continue_low_cents!) / 2;
     // band width in dollars, relative to the cash it describes (net cash itself can be near zero)
     expect(band / today.actual_liquid_cents!).toBeLessThan(0.05);
-    writeFileSync('/tmp/st360_timeline.txt', `C006 day 180 net cash: continue ${end.continue_mid_cents} ± ${band.toFixed(0)} | coach ${end.coach_mid_cents} | today ${today.actual_net_cash_cents}`);
   });
 
   it('coach move equals the carry table fixable leak (same 3-month buffer)', () => {
@@ -280,7 +298,6 @@ describe('AI narration guardrail', () => {
     expect(text).toMatch(/Net cash today/);
     expect(m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'gossip' })).toMatch(/Unknown topic/);
     expect(m.narrate(test.procedureContext(stranger), { customer_id: 'C999', topic: 'overview' })).toMatch(/No results for C999/);
-    writeFileSync('/tmp/st360_narration.txt', text);
   }, 60_000);
 });
 
@@ -329,6 +346,33 @@ describe('linked outside accounts', () => {
     test.withReducerTx(stranger, ctx => m.remove_external_account(ctx, { account_id: 'EXT-C006-2' }));
     expect(test.db.bookSnapshot.customer_id.find('C006')!.liquid_cents).toBe(before.liquid_cents);
     expect(test.db.bookLine.account_id.find('EXT-C006-2')).toBeFalsy();
+  });
+
+  it('upserts Plaid accounts idempotently and restricts writes to the database owner', () => {
+    const row = {
+      account_id: 'plaid-sandbox-account',
+      customer_id: 'C006',
+      institution: 'Plaid',
+      nickname: 'Checking',
+      account_type: 'checking',
+      balance_cents: 12345,
+      apr_pct: 0,
+      annual_yield_pct: 0,
+      monthly_payment_cents: 0,
+    };
+
+    test.withReducerTx(owner, ctx => m.upsert_plaid_accounts(ctx, { rows: [row] }));
+    test.withReducerTx(owner, ctx =>
+      m.upsert_plaid_accounts(ctx, { rows: [{ ...row, balance_cents: 54321 }] })
+    );
+    const plaidRows = [...test.db.externalAccount.customer_id.filter('C006')].filter(account =>
+      account.account_id.endsWith('PLAID-plaid-sandbox-account')
+    );
+    expect(plaidRows).toHaveLength(1);
+    expect(plaidRows[0].balance_cents).toBe(54321);
+    expect(() =>
+      test.withReducerTx(stranger, ctx => m.upsert_plaid_accounts(ctx, { rows: [row] }))
+    ).toThrow(/owner/);
   });
 });
 

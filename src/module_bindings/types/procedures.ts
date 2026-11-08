@@ -10,4 +10,3 @@ import * as NarrateProcedure from "../narrate_procedure";
 
 export type NarrateArgs = __Infer<typeof NarrateProcedure.params>;
 export type NarrateResult = __Infer<typeof NarrateProcedure.returnType>;
-
