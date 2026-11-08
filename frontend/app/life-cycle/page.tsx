@@ -20,6 +20,7 @@ import {
   YAxis,
 } from 'recharts'
 import { generateSpendingData, type SpendingPoint } from './mockData'
+import AppHeader from '@/components/AppHeader'
 
 /** Shared glassmorphism panel styling. */
 const glass =
@@ -58,41 +59,6 @@ function SpendingTooltip({ active, payload }: SpendingTooltipProps) {
       <p className="mt-1.5 text-sm font-medium text-slate-500">Total Spending</p>
       <p className="text-xl font-extrabold text-slate-800">{formatUSD(point.total)}</p>
     </div>
-  )
-}
-
-/* ---- Header -------------------------------------------------------------- */
-function Header() {
-  return (
-    <header className="sticky top-0 z-30 border-b border-white/50 bg-white/60 backdrop-blur-xl">
-      <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
-        <div className="flex items-center gap-3">
-          <span className="text-xl font-extrabold tracking-[0.15em] text-brand">
-            PNC
-          </span>
-          <span className="hidden items-center gap-3 sm:flex">
-            <span className="h-5 w-px bg-slate-300" aria-hidden="true" />
-            <span className="text-sm font-semibold text-slate-500">
-              360° Financial Advisor
-            </span>
-          </span>
-        </div>
-
-        <button
-          type="button"
-          className="group flex items-center gap-3 rounded-full border border-white/60 bg-white/50 py-1.5 pl-4 pr-1.5 transition hover:bg-white/80"
-        >
-          <span className="hidden text-right leading-tight sm:block">
-            <span className="block text-sm font-semibold text-slate-700">Alex Johnson</span>
-            <span className="block text-xs text-slate-400">Premium member</span>
-          </span>
-          <span className="relative inline-flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-brand to-brand-light text-sm font-bold text-white shadow-md ring-2 ring-white">
-            AJ
-            <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-white bg-emerald-500" />
-          </span>
-        </button>
-      </div>
-    </header>
   )
 }
 
@@ -347,7 +313,7 @@ export default function LifeCycle() {
         <div className="absolute bottom-[-80px] right-1/4 h-72 w-72 rounded-full bg-orange-200/50 blur-3xl" />
       </div>
 
-      <Header />
+      <AppHeader current="health" />
 
       <main className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-8">
         {/* Page title + range selector */}

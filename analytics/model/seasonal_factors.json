@@ -1,0 +1,468 @@
+{
+ "monthly_factors": {
+  "dining": [
+   0.9034,
+   0.9027,
+   1.0281,
+   1.0042,
+   1.0517,
+   1.0213,
+   1.024,
+   1.0449,
+   0.9886,
+   1.0243,
+   0.9656,
+   1.041
+  ],
+  "groceries": [
+   0.9823,
+   0.9111,
+   0.9979,
+   0.9735,
+   1.0294,
+   0.996,
+   1.0232,
+   1.0185,
+   0.9816,
+   1.0068,
+   1.0183,
+   1.0614
+  ],
+  "transport": [
+   0.8789,
+   0.8521,
+   0.9885,
+   0.998,
+   1.0961,
+   1.0542,
+   1.089,
+   1.0798,
+   1.0251,
+   1.0497,
+   0.9662,
+   0.9224
+  ],
+  "shopping": [
+   0.8418,
+   0.8587,
+   0.9747,
+   0.9529,
+   1.0288,
+   0.9776,
+   0.9816,
+   1.0218,
+   0.9257,
+   0.9809,
+   1.0883,
+   1.3671
+  ],
+  "other_spending": [
+   0.8974,
+   0.8705,
+   0.9922,
+   0.9758,
+   1.0401,
+   1.0034,
+   1.0182,
+   1.0252,
+   0.9733,
+   1.0149,
+   1.0399,
+   1.149
+  ],
+  "utilities": [
+   1.0675,
+   1.0082,
+   0.9094,
+   0.8699,
+   0.939,
+   1.0675,
+   1.1664,
+   1.1862,
+   1.0379,
+   0.8896,
+   0.8699,
+   0.9885
+  ],
+  "housing": [
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0,
+   1.0
+  ]
+ },
+ "monthly_factor_source": {
+  "dining": [
+   "MRTSSM722USN"
+  ],
+  "groceries": [
+   "MRTSSM4451USN"
+  ],
+  "transport": [
+   "MRTSSM447USN"
+  ],
+  "shopping": [
+   "MRTSSM452USN",
+   "MRTSSM448USN"
+  ],
+  "other_spending": [
+   "MRTSSM44Y72USN"
+  ],
+  "utilities": "ASSUMED summer/winter pattern",
+  "housing": "flat (fixed payments)"
+ },
+ "years_used": [
+  2015,
+  2016,
+  2017,
+  2018,
+  2019,
+  2022,
+  2023,
+  2024,
+  2025
+ ],
+ "events_assumed": {
+  "2025-02": {
+   "dining": [
+    [
+     14,
+     0.3,
+     "Valentine's Day"
+    ]
+   ],
+   "shopping": [
+    [
+     13,
+     0.15,
+     "Valentine's gifts"
+    ]
+   ],
+   "groceries": [
+    [
+     8,
+     0.12,
+     "Super Bowl weekend"
+    ]
+   ]
+  },
+  "2025-05": {
+   "dining": [
+    [
+     11,
+     0.2,
+     "Mother's Day"
+    ]
+   ],
+   "shopping": [
+    [
+     9,
+     0.1,
+     "Mother's Day gifts"
+    ]
+   ],
+   "transport": [
+    [
+     23,
+     0.15,
+     "Memorial Day travel"
+    ]
+   ]
+  },
+  "2025-06": {
+   "dining": [
+    [
+     15,
+     0.15,
+     "Father's Day"
+    ]
+   ]
+  },
+  "2025-07": {
+   "groceries": [
+    [
+     3,
+     0.2,
+     "July 4th cookout"
+    ]
+   ],
+   "transport": [
+    [
+     2,
+     0.15,
+     "July 4th travel"
+    ]
+   ],
+   "shopping": [
+    [
+     25,
+     0.2,
+     "Back-to-school"
+    ]
+   ]
+  },
+  "2025-08": {
+   "shopping": [
+    [
+     8,
+     0.3,
+     "Back-to-school"
+    ],
+    [
+     15,
+     0.15,
+     "Back-to-school"
+    ]
+   ]
+  },
+  "2025-09": {
+   "transport": [
+    [
+     1,
+     0.12,
+     "Labor Day travel"
+    ]
+   ]
+  },
+  "2025-11": {
+   "groceries": [
+    [
+     25,
+     0.25,
+     "Thanksgiving groceries"
+    ]
+   ],
+   "transport": [
+    [
+     26,
+     0.15,
+     "Thanksgiving travel"
+    ]
+   ],
+   "shopping": [
+    [
+     28,
+     0.3,
+     "Black Friday"
+    ]
+   ]
+  },
+  "2025-12": {
+   "shopping": [
+    [
+     1,
+     0.1,
+     "Cyber Week / early gifts"
+    ],
+    [
+     15,
+     0.25,
+     "Holiday gifts"
+    ],
+    [
+     21,
+     0.3,
+     "Last-minute gifts"
+    ]
+   ],
+   "groceries": [
+    [
+     23,
+     0.25,
+     "Holiday meals"
+    ]
+   ],
+   "transport": [
+    [
+     22,
+     0.15,
+     "Holiday travel"
+    ]
+   ],
+   "dining": [
+    [
+     31,
+     0.12,
+     "New Year's Eve"
+    ]
+   ]
+  },
+  "2026-02": {
+   "dining": [
+    [
+     14,
+     0.3,
+     "Valentine's Day"
+    ]
+   ],
+   "shopping": [
+    [
+     13,
+     0.15,
+     "Valentine's gifts"
+    ]
+   ],
+   "groceries": [
+    [
+     7,
+     0.12,
+     "Super Bowl weekend"
+    ]
+   ]
+  },
+  "2026-05": {
+   "dining": [
+    [
+     10,
+     0.2,
+     "Mother's Day"
+    ]
+   ],
+   "shopping": [
+    [
+     8,
+     0.1,
+     "Mother's Day gifts"
+    ]
+   ],
+   "transport": [
+    [
+     22,
+     0.15,
+     "Memorial Day travel"
+    ]
+   ]
+  },
+  "2026-06": {
+   "dining": [
+    [
+     21,
+     0.15,
+     "Father's Day"
+    ]
+   ]
+  },
+  "2026-07": {
+   "groceries": [
+    [
+     3,
+     0.2,
+     "July 4th cookout"
+    ]
+   ],
+   "transport": [
+    [
+     2,
+     0.15,
+     "July 4th travel"
+    ]
+   ],
+   "shopping": [
+    [
+     25,
+     0.2,
+     "Back-to-school"
+    ]
+   ]
+  },
+  "2026-08": {
+   "shopping": [
+    [
+     8,
+     0.3,
+     "Back-to-school"
+    ],
+    [
+     15,
+     0.15,
+     "Back-to-school"
+    ]
+   ]
+  },
+  "2026-09": {
+   "transport": [
+    [
+     4,
+     0.12,
+     "Labor Day travel"
+    ]
+   ]
+  },
+  "2026-11": {
+   "groceries": [
+    [
+     24,
+     0.25,
+     "Thanksgiving groceries"
+    ]
+   ],
+   "transport": [
+    [
+     25,
+     0.15,
+     "Thanksgiving travel"
+    ]
+   ],
+   "shopping": [
+    [
+     27,
+     0.3,
+     "Black Friday"
+    ],
+    [
+     30,
+     0.15,
+     "Cyber Monday"
+    ]
+   ]
+  },
+  "2026-12": {
+   "shopping": [
+    [
+     7,
+     0.1,
+     "Cyber Week / early gifts"
+    ],
+    [
+     15,
+     0.25,
+     "Holiday gifts"
+    ],
+    [
+     21,
+     0.3,
+     "Last-minute gifts"
+    ]
+   ],
+   "groceries": [
+    [
+     23,
+     0.25,
+     "Holiday meals"
+    ]
+   ],
+   "transport": [
+    [
+     22,
+     0.15,
+     "Holiday travel"
+    ]
+   ],
+   "dining": [
+    [
+     31,
+     0.12,
+     "New Year's Eve"
+    ]
+   ]
+  }
+ }
+}

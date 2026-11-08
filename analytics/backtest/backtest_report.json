@@ -1,0 +1,951 @@
+{
+ "cutoff": "2026-04-30",
+ "end": "2026-10-31",
+ "customers": 100,
+ "paths": 500,
+ "coverage90_mean": 0.8889673913043478,
+ "coverage90_raw_mean": 0.4961413043478262,
+ "end_error_pct_median": 0.023137152339028147,
+ "end_error_pct_mean": 0.04105005043636465,
+ "end_half_width_pct_median": 0.07594149351175965,
+ "pinball_mean": 0.007469696380751378,
+ "by_archetype": {
+  "mainstream": {
+   "coverage90": 0.8302989130434784,
+   "endErrorPct": 0.0405888719879619,
+   "endHalfWidthPct": 0.0975487983145742
+  },
+  "holiday_heavy": {
+   "coverage90": 0.8538043478260869,
+   "endErrorPct": 0.04231819902875565,
+   "endHalfWidthPct": 0.13309618070814533
+  },
+  "winter_traveler": {
+   "coverage90": 0.9663043478260869,
+   "endErrorPct": 0.026304789797523008,
+   "endHalfWidthPct": 0.12277413066420162
+  },
+  "no_holiday": {
+   "coverage90": 0.8820652173913043,
+   "endErrorPct": 0.04865917658050699,
+   "endHalfWidthPct": 0.08727238972326436
+  },
+  "summer_family": {
+   "coverage90": 0.8695652173913043,
+   "endErrorPct": 0.052969498180477345,
+   "endHalfWidthPct": 0.15245442268396903
+  },
+  "student": {
+   "coverage90": 1,
+   "endErrorPct": 0.05000137526993568,
+   "endHalfWidthPct": 0.18335123282679247
+  },
+  "annual_bills": {
+   "coverage90": 0.9967391304347825,
+   "endErrorPct": 0.02789197755460014,
+   "endHalfWidthPct": 0.11264933097473324
+  }
+ },
+ "per_customer": [
+  {
+   "cid": "C001",
+   "archetype": "mainstream",
+   "coverage90": 0.7934782608695652,
+   "coverage90Raw": 0.8641304347826086,
+   "endErrorPct": 0.05535244632159404,
+   "endHalfWidthPct": 0.07594149351175965,
+   "pinball": 0.007524311561607741
+  },
+  {
+   "cid": "C002",
+   "archetype": "mainstream",
+   "coverage90": 0.9347826086956522,
+   "coverage90Raw": 0.483695652173913,
+   "endErrorPct": 0.03280358953224652,
+   "endHalfWidthPct": 0.041380999084274284,
+   "pinball": 0.003935320771309911
+  },
+  {
+   "cid": "C003",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.07412304821973273,
+   "endHalfWidthPct": 0.08716846343054108,
+   "pinball": 0.007888772422868565
+  },
+  {
+   "cid": "C004",
+   "archetype": "mainstream",
+   "coverage90": 0.010869565217391304,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.045162883286775334,
+   "endHalfWidthPct": 0.03686889962741584,
+   "pinball": 0.008700466092731498
+  },
+  {
+   "cid": "C005",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.3423913043478261,
+   "endErrorPct": 0.006804998554119103,
+   "endHalfWidthPct": 0.027821701082801794,
+   "pinball": 0.0017322165201058366
+  },
+  {
+   "cid": "C006",
+   "archetype": "mainstream",
+   "coverage90": 0.8260869565217391,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.008422490893642874,
+   "endHalfWidthPct": 0.02076975584175548,
+   "pinball": 0.0020174342645628896
+  },
+  {
+   "cid": "C007",
+   "archetype": "mainstream",
+   "coverage90": 0.8641304347826086,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.0016902902629617519,
+   "endHalfWidthPct": 0.0323909412136201,
+   "pinball": 0.001229524580645743
+  },
+  {
+   "cid": "C008",
+   "archetype": "mainstream",
+   "coverage90": 0.6739130434782609,
+   "coverage90Raw": 0.010869565217391304,
+   "endErrorPct": 0.031887038006768995,
+   "endHalfWidthPct": 0.057050380345680884,
+   "pinball": 0.007273415762311321
+  },
+  {
+   "cid": "C009",
+   "archetype": "mainstream",
+   "coverage90": 0.5380434782608695,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.02189835606119318,
+   "endHalfWidthPct": 0.04485662914919199,
+   "pinball": 0.006710192969744679
+  },
+  {
+   "cid": "C010",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.9402173913043478,
+   "endErrorPct": 0.045921797344505404,
+   "endHalfWidthPct": 0.06866086902697781,
+   "pinball": 0.007047285472857849
+  },
+  {
+   "cid": "C011",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.10869565217391304,
+   "endErrorPct": 0.009238001687091369,
+   "endHalfWidthPct": 0.1216315139709631,
+   "pinball": 0.003870372607479941
+  },
+  {
+   "cid": "C012",
+   "archetype": "mainstream",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.16847826086956522,
+   "endErrorPct": 0.019059697291346774,
+   "endHalfWidthPct": 0.03687351824516532,
+   "pinball": 0.0029740188767095146
+  },
+  {
+   "cid": "C013",
+   "archetype": "mainstream",
+   "coverage90": 0.8369565217391305,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.04100237475488202,
+   "endHalfWidthPct": 0.07506698622776402,
+   "pinball": 0.0056779347545676245
+  },
+  {
+   "cid": "C014",
+   "archetype": "mainstream",
+   "coverage90": 0.9239130434782609,
+   "coverage90Raw": 0.6141304347826086,
+   "endErrorPct": 0.000934170672146452,
+   "endHalfWidthPct": 0.09978126190518403,
+   "pinball": 0.004229871269323943
+  },
+  {
+   "cid": "C015",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.483695652173913,
+   "endErrorPct": 0.021299226058565907,
+   "endHalfWidthPct": 0.11670671732309076,
+   "pinball": 0.004884441196544708
+  },
+  {
+   "cid": "C016",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.005777593721238521,
+   "endHalfWidthPct": 0.06635205285784686,
+   "pinball": 0.002082805370070546
+  },
+  {
+   "cid": "C017",
+   "archetype": "mainstream",
+   "coverage90": 0.30434782608695654,
+   "coverage90Raw": 0.9456521739130435,
+   "endErrorPct": 0.07063744319165578,
+   "endHalfWidthPct": 0.07233233844501531,
+   "pinball": 0.012464745133087776
+  },
+  {
+   "cid": "C018",
+   "archetype": "mainstream",
+   "coverage90": 0.9130434782608695,
+   "coverage90Raw": 0.8478260869565217,
+   "endErrorPct": 0.004547464224393625,
+   "endHalfWidthPct": 0.13134892859309058,
+   "pinball": 0.0052300562423653755
+  },
+  {
+   "cid": "C019",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.000012366292048364011,
+   "endHalfWidthPct": 0.09719536648437455,
+   "pinball": 0.005997893924577211
+  },
+  {
+   "cid": "C020",
+   "archetype": "mainstream",
+   "coverage90": 0.5434782608695652,
+   "coverage90Raw": 0.358695652173913,
+   "endErrorPct": 0.03631505884140015,
+   "endHalfWidthPct": 0.0648415538822025,
+   "pinball": 0.008383739774631008
+  },
+  {
+   "cid": "C021",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.1956521739130435,
+   "endErrorPct": 0.01839514037910063,
+   "endHalfWidthPct": 0.0504485202067004,
+   "pinball": 0.0021041783762070668
+  },
+  {
+   "cid": "C022",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.02147238870936745,
+   "endHalfWidthPct": 0.02566866719789157,
+   "pinball": 0.0018291686709485694
+  },
+  {
+   "cid": "C023",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.5,
+   "endErrorPct": 0.00856064300902108,
+   "endHalfWidthPct": 0.047782692012837275,
+   "pinball": 0.002542255466352141
+  },
+  {
+   "cid": "C024",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.5489130434782609,
+   "endErrorPct": 0.035342916363694604,
+   "endHalfWidthPct": 0.04820349181793686,
+   "pinball": 0.0030693169738697608
+  },
+  {
+   "cid": "C025",
+   "archetype": "mainstream",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.30978260869565216,
+   "endErrorPct": 0.00733546925648858,
+   "endHalfWidthPct": 0.03592751904065295,
+   "pinball": 0.0021190983372946434
+  },
+  {
+   "cid": "C026",
+   "archetype": "mainstream",
+   "coverage90": 0.8152173913043478,
+   "coverage90Raw": 0.41304347826086957,
+   "endErrorPct": 0.05838254332967183,
+   "endHalfWidthPct": 0.07349562810509998,
+   "pinball": 0.006707619528901919
+  },
+  {
+   "cid": "C027",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.019367992461089896,
+   "endHalfWidthPct": 0.029885491771696186,
+   "pinball": 0.001815362151814372
+  },
+  {
+   "cid": "C028",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.18478260869565216,
+   "endErrorPct": 0.011833758067482268,
+   "endHalfWidthPct": 0.030532045855123528,
+   "pinball": 0.0015725475926092773
+  },
+  {
+   "cid": "C029",
+   "archetype": "mainstream",
+   "coverage90": 0.266304347826087,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.10731146526494331,
+   "endHalfWidthPct": 0.08000213898444217,
+   "pinball": 0.01310402077992931
+  },
+  {
+   "cid": "C030",
+   "archetype": "mainstream",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.010826820704805144,
+   "endHalfWidthPct": 0.02825022992463066,
+   "pinball": 0.0017982536233020804
+  },
+  {
+   "cid": "C031",
+   "archetype": "holiday_heavy",
+   "coverage90": 0.7282608695652174,
+   "coverage90Raw": 0.5652173913043478,
+   "endErrorPct": 0.014885575890913652,
+   "endHalfWidthPct": 0.07703947039663224,
+   "pinball": 0.007169306761533074
+  },
+  {
+   "cid": "C032",
+   "archetype": "winter_traveler",
+   "coverage90": 0.9510869565217391,
+   "coverage90Raw": 0.6141304347826086,
+   "endErrorPct": 0.02275937521057741,
+   "endHalfWidthPct": 0.05172267551835148,
+   "pinball": 0.003929879495452563
+  },
+  {
+   "cid": "C033",
+   "archetype": "no_holiday",
+   "coverage90": 0.4782608695652174,
+   "coverage90Raw": 0.4673913043478261,
+   "endErrorPct": 0.04405683905570649,
+   "endHalfWidthPct": 0.024243007193846575,
+   "pinball": 0.005579492669568246
+  },
+  {
+   "cid": "C034",
+   "archetype": "holiday_heavy",
+   "coverage90": 1,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.022194944088814995,
+   "endHalfWidthPct": 0.05653883156733747,
+   "pinball": 0.004009714283687906
+  },
+  {
+   "cid": "C035",
+   "archetype": "holiday_heavy",
+   "coverage90": 0.7717391304347826,
+   "coverage90Raw": 0.8260869565217391,
+   "endErrorPct": 0.01620516772590263,
+   "endHalfWidthPct": 0.08819796282675967,
+   "pinball": 0.005553002267689309
+  },
+  {
+   "cid": "C036",
+   "archetype": "summer_family",
+   "coverage90": 1,
+   "coverage90Raw": 0.6195652173913043,
+   "endErrorPct": 0.032342242028138575,
+   "endHalfWidthPct": 0.1469032505254082,
+   "pinball": 0.0052761170261368395
+  },
+  {
+   "cid": "C037",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 0.9347826086956522,
+   "endErrorPct": 0.07868738868955286,
+   "endHalfWidthPct": 0.5350827970225862,
+   "pinball": 0.01687038925438295
+  },
+  {
+   "cid": "C038",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.020767297150634186,
+   "endHalfWidthPct": 0.0685810248484913,
+   "pinball": 0.0025429184822330923
+  },
+  {
+   "cid": "C039",
+   "archetype": "annual_bills",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.8260869565217391,
+   "endErrorPct": 0.06095504515362855,
+   "endHalfWidthPct": 0.15054137775922893,
+   "pinball": 0.01054656269847066
+  },
+  {
+   "cid": "C040",
+   "archetype": "no_holiday",
+   "coverage90": 0.9619565217391305,
+   "coverage90Raw": 0.20652173913043478,
+   "endErrorPct": 0.0068470293603917695,
+   "endHalfWidthPct": 0.03005637383165362,
+   "pinball": 0.00149658626649563
+  },
+  {
+   "cid": "C041",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.011762388000839681,
+   "endHalfWidthPct": 0.1140106253673024,
+   "pinball": 0.004070143835812308
+  },
+  {
+   "cid": "C042",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 0.6684782608695652,
+   "endErrorPct": 0.10554437091072677,
+   "endHalfWidthPct": 0.17339180889532393,
+   "pinball": 0.010480128104380778
+  },
+  {
+   "cid": "C043",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.0045445950203139955,
+   "endHalfWidthPct": 0.11518929542905348,
+   "pinball": 0.003831806956362111
+  },
+  {
+   "cid": "C044",
+   "archetype": "winter_traveler",
+   "coverage90": 0.7228260869565217,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.02764700265763913,
+   "endHalfWidthPct": 0.040807700621536075,
+   "pinball": 0.005070566850054117
+  },
+  {
+   "cid": "C045",
+   "archetype": "mainstream",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.32065217391304346,
+   "endErrorPct": 0.02364645345147922,
+   "endHalfWidthPct": 0.030115837636759703,
+   "pinball": 0.002267142597216129
+  },
+  {
+   "cid": "C046",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 0.9891304347826086,
+   "endErrorPct": 0.014017076598289517,
+   "endHalfWidthPct": 0.10640888683408274,
+   "pinball": 0.003984602369470153
+  },
+  {
+   "cid": "C047",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.05307353234086587,
+   "endHalfWidthPct": 0.16049090411782935,
+   "pinball": 0.007936377684338079
+  },
+  {
+   "cid": "C048",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 0.33152173913043476,
+   "endErrorPct": 0.0023577199262896846,
+   "endHalfWidthPct": 0.078057930029515,
+   "pinball": 0.0030512003743388832
+  },
+  {
+   "cid": "C049",
+   "archetype": "mainstream",
+   "coverage90": 0.75,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.07353492934842804,
+   "endHalfWidthPct": 0.07983135131687806,
+   "pinball": 0.009025713523194359
+  },
+  {
+   "cid": "C050",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 0.8315217391304348,
+   "endErrorPct": 0.01081005924922485,
+   "endHalfWidthPct": 0.05346406782933115,
+   "pinball": 0.0018093394664970373
+  },
+  {
+   "cid": "C051",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.7771739130434783,
+   "endErrorPct": 0.021866852024839362,
+   "endHalfWidthPct": 0.042937406040539736,
+   "pinball": 0.0022249130770787178
+  },
+  {
+   "cid": "C052",
+   "archetype": "mainstream",
+   "coverage90": 1,
+   "coverage90Raw": 0.04891304347826087,
+   "endErrorPct": 0.008220612549227554,
+   "endHalfWidthPct": 0.039000256894810924,
+   "pinball": 0.00201988936834528
+  },
+  {
+   "cid": "C053",
+   "archetype": "annual_bills",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.2554347826086957,
+   "endErrorPct": 0.02370489000452248,
+   "endHalfWidthPct": 0.1906973749470251,
+   "pinball": 0.008744259756319085
+  },
+  {
+   "cid": "C054",
+   "archetype": "summer_family",
+   "coverage90": 0.02717391304347826,
+   "coverage90Raw": 0.5163043478260869,
+   "endErrorPct": 0.19215648222467732,
+   "endHalfWidthPct": 0.15348274343871476,
+   "pinball": 0.03714116393723359
+  },
+  {
+   "cid": "C055",
+   "archetype": "holiday_heavy",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.9510869565217391,
+   "endErrorPct": 0.043979215704680136,
+   "endHalfWidthPct": 0.11670909949999625,
+   "pinball": 0.00652123821729912
+  },
+  {
+   "cid": "C056",
+   "archetype": "mainstream",
+   "coverage90": 0.44565217391304346,
+   "coverage90Raw": 0.6195652173913043,
+   "endErrorPct": 0.09816604618858688,
+   "endHalfWidthPct": 0.1042408549417355,
+   "pinball": 0.01587949288067963
+  },
+  {
+   "cid": "C057",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.7391304347826086,
+   "endErrorPct": 0.25315727679593514,
+   "endHalfWidthPct": 0.9904529504963776,
+   "pinball": 0.03645513783910403
+  },
+  {
+   "cid": "C058",
+   "archetype": "winter_traveler",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.9891304347826086,
+   "endErrorPct": 0.04102039490672025,
+   "endHalfWidthPct": 0.11947588601281153,
+   "pinball": 0.006564344845067338
+  },
+  {
+   "cid": "C059",
+   "archetype": "no_holiday",
+   "coverage90": 0.782608695652174,
+   "coverage90Raw": 0.02717391304347826,
+   "endErrorPct": 0.05049531551625936,
+   "endHalfWidthPct": 0.09193840459556207,
+   "pinball": 0.005585991929579745
+  },
+  {
+   "cid": "C060",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.33152173913043476,
+   "endErrorPct": 0.015883456986696343,
+   "endHalfWidthPct": 0.04225166909935041,
+   "pinball": 0.0018993974926383723
+  },
+  {
+   "cid": "C061",
+   "archetype": "annual_bills",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.32065217391304346,
+   "endErrorPct": 0.0030874909007015585,
+   "endHalfWidthPct": 0.029758873547717512,
+   "pinball": 0.0010106913765183744
+  },
+  {
+   "cid": "C062",
+   "archetype": "no_holiday",
+   "coverage90": 1,
+   "coverage90Raw": 0.6793478260869565,
+   "endErrorPct": 0.13950984686556844,
+   "endHalfWidthPct": 0.16912725443767157,
+   "pinball": 0.015352514730484556
+  },
+  {
+   "cid": "C063",
+   "archetype": "summer_family",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.049487439989666517,
+   "endHalfWidthPct": 0.14317397613798769,
+   "pinball": 0.008723363430133491
+  },
+  {
+   "cid": "C064",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 0.010869565217391304,
+   "endErrorPct": 0.010653423510152379,
+   "endHalfWidthPct": 0.05667540608232437,
+   "pinball": 0.002776266105224884
+  },
+  {
+   "cid": "C065",
+   "archetype": "mainstream",
+   "coverage90": 0.7608695652173914,
+   "coverage90Raw": 0.1956521739130435,
+   "endErrorPct": 0.023695403958184726,
+   "endHalfWidthPct": 0.5608911824747865,
+   "pinball": 0.03641993249290126
+  },
+  {
+   "cid": "C066",
+   "archetype": "summer_family",
+   "coverage90": 1,
+   "coverage90Raw": 0.16847826086956522,
+   "endErrorPct": 0.011665105601437074,
+   "endHalfWidthPct": 0.4797551893398177,
+   "pinball": 0.014353945704664967
+  },
+  {
+   "cid": "C067",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 0.7989130434782609,
+   "endErrorPct": 0.006448545211745326,
+   "endHalfWidthPct": 0.05366486397580617,
+   "pinball": 0.002614210320933705
+  },
+  {
+   "cid": "C068",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.6956521739130435,
+   "endErrorPct": 0.013233370070301693,
+   "endHalfWidthPct": 0.056731382662854636,
+   "pinball": 0.0029575499027759667
+  },
+  {
+   "cid": "C069",
+   "archetype": "holiday_heavy",
+   "coverage90": 0.2391304347826087,
+   "coverage90Raw": 0.7663043478260869,
+   "endErrorPct": 0.10698006670939027,
+   "endHalfWidthPct": 0.10842656426972438,
+   "pinball": 0.020126463254430717
+  },
+  {
+   "cid": "C070",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.024918620962147357,
+   "endHalfWidthPct": 0.08821421359765262,
+   "pinball": 0.004463249717674646
+  },
+  {
+   "cid": "C071",
+   "archetype": "mainstream",
+   "coverage90": 0.7336956521739131,
+   "coverage90Raw": 0.8695652173913043,
+   "endErrorPct": 0.07390695423969175,
+   "endHalfWidthPct": 0.09168981470748443,
+   "pinball": 0.010712679621760673
+  },
+  {
+   "cid": "C072",
+   "archetype": "no_holiday",
+   "coverage90": 1,
+   "coverage90Raw": 0.8369565217391305,
+   "endErrorPct": 0.026194042599670623,
+   "endHalfWidthPct": 0.10665382932594253,
+   "pinball": 0.006216997385546848
+  },
+  {
+   "cid": "C073",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 0.358695652173913,
+   "endErrorPct": 0.005741857627223333,
+   "endHalfWidthPct": 0.06602251935379103,
+   "pinball": 0.0025170339819495574
+  },
+  {
+   "cid": "C074",
+   "archetype": "holiday_heavy",
+   "coverage90": 1,
+   "coverage90Raw": 0.782608695652174,
+   "endErrorPct": 0.0030785689739535873,
+   "endHalfWidthPct": 0.2866363939873913,
+   "pinball": 0.017077883354025977
+  },
+  {
+   "cid": "C075",
+   "archetype": "holiday_heavy",
+   "coverage90": 0.8097826086956522,
+   "coverage90Raw": 0.005434782608695652,
+   "endErrorPct": 0.023137152339028147,
+   "endHalfWidthPct": 0.05110545720309217,
+   "pinball": 0.00434403556945537
+  },
+  {
+   "cid": "C076",
+   "archetype": "no_holiday",
+   "coverage90": 1,
+   "coverage90Raw": 0.6358695652173914,
+   "endErrorPct": 0.10121276805519855,
+   "endHalfWidthPct": 0.16149402603306806,
+   "pinball": 0.009835468671061186
+  },
+  {
+   "cid": "C077",
+   "archetype": "no_holiday",
+   "coverage90": 1,
+   "coverage90Raw": 0.32608695652173914,
+   "endErrorPct": 0.02472822816671269,
+   "endHalfWidthPct": 0.06204397904554985,
+   "pinball": 0.0032678618600348263
+  },
+  {
+   "cid": "C078",
+   "archetype": "summer_family",
+   "coverage90": 0.7608695652173914,
+   "coverage90Raw": 0.2608695652173913,
+   "endErrorPct": 0.09848705017133813,
+   "endHalfWidthPct": 0.13367591532750964,
+   "pinball": 0.013843284551448495
+  },
+  {
+   "cid": "C079",
+   "archetype": "summer_family",
+   "coverage90": 1,
+   "coverage90Raw": 0.6304347826086957,
+   "endErrorPct": 0.011014588644132867,
+   "endHalfWidthPct": 0.0962967465686339,
+   "pinball": 0.004601661887837599
+  },
+  {
+   "cid": "C080",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.16304347826086957,
+   "endErrorPct": 0.025677722765621795,
+   "endHalfWidthPct": 0.2783676417828221,
+   "pinball": 0.010099643240045204
+  },
+  {
+   "cid": "C081",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 0.5760869565217391,
+   "endErrorPct": 0.0010436178473758754,
+   "endHalfWidthPct": 0.01665450224209355,
+   "pinball": 0.0006094386846556465
+  },
+  {
+   "cid": "C082",
+   "archetype": "no_holiday",
+   "coverage90": 0.9184782608695652,
+   "coverage90Raw": 0,
+   "endErrorPct": 0.04313591554258772,
+   "endHalfWidthPct": 0.052338471342662174,
+   "pinball": 0.005677251306223573
+  },
+  {
+   "cid": "C083",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.11413043478260869,
+   "endErrorPct": 0.04981026787650302,
+   "endHalfWidthPct": 0.07838036616036595,
+   "pinball": 0.006958628135407056
+  },
+  {
+   "cid": "C084",
+   "archetype": "holiday_heavy",
+   "coverage90": 1,
+   "coverage90Raw": 0.9891304347826086,
+   "endErrorPct": 0.115207847975661,
+   "endHalfWidthPct": 0.30562729729336446,
+   "pinball": 0.012661297946459264
+  },
+  {
+   "cid": "C085",
+   "archetype": "summer_family",
+   "coverage90": 0.9184782608695652,
+   "coverage90Raw": 0.9891304347826086,
+   "endErrorPct": 0.11275606808632217,
+   "endHalfWidthPct": 0.16202651864039222,
+   "pinball": 0.017257076165668957
+  },
+  {
+   "cid": "C086",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 0.8315217391304348,
+   "endErrorPct": 0.022584180276489226,
+   "endHalfWidthPct": 0.06578205322659703,
+   "pinball": 0.0038504704124280487
+  },
+  {
+   "cid": "C087",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.8532608695652174,
+   "endErrorPct": 0.012892832764017127,
+   "endHalfWidthPct": 0.03498686344622886,
+   "pinball": 0.0014924328084278747
+  },
+  {
+   "cid": "C088",
+   "archetype": "holiday_heavy",
+   "coverage90": 1,
+   "coverage90Raw": 0.8967391304347826,
+   "endErrorPct": 0.010320031976842687,
+   "endHalfWidthPct": 0.06108825209113527,
+   "pinball": 0.003724560069878907
+  },
+  {
+   "cid": "C089",
+   "archetype": "summer_family",
+   "coverage90": 0.9891304347826086,
+   "coverage90Raw": 0.266304347826087,
+   "endErrorPct": 0.01844183705689453,
+   "endHalfWidthPct": 0.13138635208400515,
+   "pinball": 0.010560736407861503
+  },
+  {
+   "cid": "C090",
+   "archetype": "no_holiday",
+   "coverage90": 1,
+   "coverage90Raw": 0.5652173913043478,
+   "endErrorPct": 0.04163423943039112,
+   "endHalfWidthPct": 0.14966172471952216,
+   "pinball": 0.007413554097373308
+  },
+  {
+   "cid": "C091",
+   "archetype": "summer_family",
+   "coverage90": 1,
+   "coverage90Raw": 0.5108695652173914,
+   "endErrorPct": 0.0030413404532773644,
+   "endHalfWidthPct": 0.040981857136455385,
+   "pinball": 0.0014921827303641603
+  },
+  {
+   "cid": "C092",
+   "archetype": "mainstream",
+   "coverage90": 0.8586956521739131,
+   "coverage90Raw": 0.9891304347826086,
+   "endErrorPct": 0.3624229029689186,
+   "endHalfWidthPct": 0.9464463759153289,
+   "pinball": 0.04811468232535618
+  },
+  {
+   "cid": "C093",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.8206521739130435,
+   "endErrorPct": 0.017971745358202614,
+   "endHalfWidthPct": 0.04012854348992902,
+   "pinball": 0.00229265053793277
+  },
+  {
+   "cid": "C094",
+   "archetype": "winter_traveler",
+   "coverage90": 1,
+   "coverage90Raw": 0.358695652173913,
+   "endErrorPct": 0.010904558351376083,
+   "endHalfWidthPct": 0.13970250321934627,
+   "pinball": 0.004322721308548999
+  },
+  {
+   "cid": "C095",
+   "archetype": "summer_family",
+   "coverage90": 1,
+   "coverage90Raw": 0.33695652173913043,
+   "endErrorPct": 0.00030282754888887357,
+   "endHalfWidthPct": 0.03686167764076569,
+   "pinball": 0.0017082315228879026
+  },
+  {
+   "cid": "C096",
+   "archetype": "student",
+   "coverage90": 1,
+   "coverage90Raw": 0.8315217391304348,
+   "endErrorPct": 0.06570116196929748,
+   "endHalfWidthPct": 0.155417672683852,
+   "pinball": 0.007745180122736351
+  },
+  {
+   "cid": "C097",
+   "archetype": "annual_bills",
+   "coverage90": 1,
+   "coverage90Raw": 0.8369565217391305,
+   "endErrorPct": 0.03638254912781628,
+   "endHalfWidthPct": 0.15064318972499774,
+   "pinball": 0.007082722900101917
+  },
+  {
+   "cid": "C098",
+   "archetype": "holiday_heavy",
+   "coverage90": 1,
+   "coverage90Raw": 1,
+   "endErrorPct": 0.06719341890236946,
+   "endHalfWidthPct": 0.17959247794601976,
+   "pinball": 0.013520128197809718
+  },
+  {
+   "cid": "C099",
+   "archetype": "mainstream",
+   "coverage90": 0.46195652173913043,
+   "coverage90Raw": 0.358695652173913,
+   "endErrorPct": 0.09461286402430667,
+   "endHalfWidthPct": 0.0675514321216146,
+   "pinball": 0.012561790930701484
+  },
+  {
+   "cid": "C100",
+   "archetype": "no_holiday",
+   "coverage90": 0.6793478260869565,
+   "coverage90Raw": 0.22826086956521738,
+   "endErrorPct": 0.008777541212583062,
+   "endHalfWidthPct": 0.02516682670716488,
+   "pinball": 0.002555702925413721
+  }
+ ]
+}
