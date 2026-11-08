@@ -396,3 +396,37 @@ describe('backtest reducers', () => {
     expect(() => test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: 'C999', cutoff: '' }))).toThrow(/Unknown customer/);
   });
 });
+
+describe('coach driven by the risk breakdown, and advanced metrics in narration', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+  const actions = [...test.db.coachAction.customer_id.filter('C006')];
+
+  it('targets the biggest driver of the worst case and flags the monthly gap', () => {
+    const kinds = actions.map(a => a.kind).sort();
+    const drivers = [...test.db.riskSource.customer_id.filter('C006')]
+      .filter(r => r.scenario === 'baseline' && r.source !== 'planned_cash_flow')
+      .sort((x, y) => y.es_contribution_cents - x.es_contribution_cents);
+    const expected: Record<string, string> = { income: 'protect_income', unexpected_bills: 'reserve_for_surprises' };
+    const top = drivers[0].source;
+    expect(kinds).toContain(expected[top] ?? 'trim_category');
+    expect(kinds).toContain('close_monthly_gap');
+    const driverAction = actions.find(a => a.driver === top)!;
+    expect(driverAction.es_before_cents).toBeGreaterThan(0);
+    // the coach move is unchanged: still the carry table's fixable leak
+    const carry = test.db.carrySummary.customer_id.find('C006')!;
+    const move = actions.find(a => a.kind === 'move_cash_to_debt')!;
+    expect(carry.idle_cash_cents - move.amount_cents).toBeLessThan(10_000);
+    writeFileSync('/tmp/st360_actions.txt', actions.map(a => `${a.kind} [${a.driver}] ${a.amount_cents} ES ${a.es_before_cents}->${a.es_after_cents} | ${a.detail}`).join('\n'));
+  });
+
+  it('the risk explanation now covers worst case, top driver, deepest dip and best lever', () => {
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'risk' });
+    expect(text).toMatch(/worst 5% of futures/);
+    expect(text).toMatch(/Biggest driver of a bad outcome/);
+    expect(text).toMatch(/Deepest dip/);
+    expect(text).toMatch(/helps your 180-day cash the most/);
+    const coachText = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'coach' });
+    writeFileSync('/tmp/st360_risk_text.txt', text + '\n\n' + coachText);
+  }, 60_000);
+});

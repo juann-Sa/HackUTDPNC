@@ -12,7 +12,7 @@ import { dayNumber, isoFromDayNumber } from './math/dates';
 import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR } from './math/book';
 import { SHRINK_K, buildSchedule } from './math/schedule';
 import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
-import { RISK_CAP, analyze } from './math/coach';
+import { RISK_CAP, analyze, sourceLabel } from './math/coach';
 import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 import { backtestCustomer } from './math/backtest';
@@ -385,6 +385,7 @@ export const run_forecast = spacetimedb.reducer(
       ctx.db.coachAction.insert({
         action_id: `${cid}|${x.kind}`, customer_id: cid, kind: x.kind, amount_cents: x.amountCents, fraction: x.fraction,
         annual_saving_cents: round(x.annualSavingCents), p_low_before: x.pLowBefore, p_low_after: x.pLowAfter, detail: x.detail,
+        driver: x.driver, es_before_cents: round(x.esBefore), es_after_cents: round(x.esAfter),
       });
     const existing = ctx.db.forecastAssumption.customer_id.find(cid);
     if (existing) ctx.db.forecastAssumption.customer_id.delete(cid);
@@ -496,9 +497,39 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
   if (job) add('stress_job_loss', `That chance if income stopped for 3 months: ${pct(job.p_low)}`);
   const bill = ctx.db.forecastRun.run_id.find(`${cid}|stress_bill`);
   if (bill) add('stress_bill', `That chance after a surprise $3,000 bill: ${pct(bill.p_low)}`);
+  // advanced risk metrics, in plain words
+  if (base) {
+    add('es_worst', `In the worst 5% of futures, your cash falls by an average of ${usd(base.es95_cents)} over 180 days`);
+    add('dip', `Deepest dip in cash you would likely see (only a 1-in-20 chance of worse): ${usd(base.mdd_p95_cents)}`);
+  }
+  const drivers = [...ctx.db.riskSource.customer_id.filter(cid)]
+    .filter(r => r.scenario === 'baseline' && r.source !== 'planned_cash_flow' && r.es_contribution_cents > 0)
+    .sort((x, y) => y.es_contribution_cents - x.es_contribution_cents);
+  const uncertainTotal = drivers.reduce((p, r) => p + r.es_contribution_cents, 0);
+  if (drivers.length && uncertainTotal > 0)
+    add('top_risk', `Biggest driver of a bad outcome: ${sourceLabel(drivers[0].source)} (${pct(drivers[0].es_contribution_cents / uncertainTotal, 0)} of the uncertain part of the worst case)`);
+  const lever = [...ctx.db.sensitivity.customer_id.filter(cid)]
+    .filter(r => r.lever.startsWith('spend:') && !['spend:housing', 'spend:utilities'].includes(r.lever) && r.delta_end_p50_cents > 0)
+    .sort((x, y) => y.delta_end_p50_cents - x.delta_end_p50_cents)[0];
+  if (lever) add('top_lever', `Spending change that helps your 180-day cash the most: ${lever.label} (about ${usd(lever.delta_end_p50_cents)} more cash)`);
+
+  const worst = (a: { es_before_cents: number; es_after_cents: number }) =>
+    a.es_before_cents > 0 && Math.round(a.es_after_cents) !== Math.round(a.es_before_cents)
+      ? `; average worst-case loss goes from ${usd(a.es_before_cents)} to ${usd(a.es_after_cents)}`
+      : '';
   for (const a of ctx.db.coachAction.customer_id.filter(cid)) {
     if (a.kind === 'move_cash_to_debt')
       add('action_move', `Coach suggestion: move ${usd(a.amount_cents)} of spare cash to your highest-interest debt, saving about ${usd(a.annual_saving_cents)} a year; chance of running low goes from ${pct(a.p_low_before)} to ${pct(a.p_low_after)}`);
+    else if (a.kind === 'trim_category')
+      add('action_trim_category', `Coach suggestion: trim ${sourceLabel(a.driver)} by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month), because it is your biggest swing factor${worst(a)}`);
+    else if (a.kind === 'protect_income')
+      add('action_protect_income', a.fraction > 0
+        ? `Coach suggestion: a drop in income is your biggest risk, so keep a cash cushion and trim extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month)${worst(a)}`
+        : `Coach note: a drop in income is your biggest risk, which is why the coach always leaves a cash cushion of a few months of bills`);
+    else if (a.kind === 'reserve_for_surprises')
+      add('action_reserve', `Coach suggestion: keep about ${usd(a.amount_cents)} set aside for surprise bills, your biggest risk${worst(a)}`);
+    else if (a.kind === 'close_monthly_gap')
+      add('action_gap', `Coach finding: ${a.detail.replace(/\.$/, '')}${worst(a)}`);
     else
       add('action_trim', `Coach suggestion: trim dining, shopping and other extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month, ${usd(a.annual_saving_cents)} a year)`);
   }

@@ -13,14 +13,32 @@ const HIGH_COST_APR = 10;
 const SEARCH_PAIRS = 200; // frontier / bisection / sensitivities reuse the first 200 tapes (CRN)
 const MAX_TRIM = 0.3;
 
+export type ActionKind =
+  | 'move_cash_to_debt'
+  | 'trim_discretionary'
+  | 'trim_category'
+  | 'protect_income'
+  | 'reserve_for_surprises'
+  | 'close_monthly_gap';
+
 export interface CoachAction {
-  kind: 'move_cash_to_debt' | 'trim_discretionary';
-  amountCents: number; // move: one-time cents; trim: cents per month
-  fraction: number; // trim: share of discretionary spend; move: share of max movable
+  kind: ActionKind;
+  driver: string; // the risk source this action targets ('' if none)
+  amountCents: number; // move/reserve: one-time cents; trims/gap: cents per month
+  fraction: number; // trims: share of the spending cut; move: share of max movable
   annualSavingCents: number;
   pLowBefore: number;
   pLowAfter: number;
+  esBefore: number; // average loss of cash in the worst 5% of futures, before → after
+  esAfter: number;
   detail: string;
+}
+
+export interface Driver {
+  source: string;
+  label: string;
+  esContribution: number;
+  share: number; // of the uncertain part of the worst case
 }
 
 export interface Analysis {
@@ -30,6 +48,16 @@ export interface Analysis {
   sensitivities: { lever: string; label: string; deltaPLow: number; deltaEndP50: number }[];
   frontier: { moveCents: number; pLow: number; annualSavingCents: number; recommended: boolean }[];
   actions: CoachAction[];
+  drivers: Driver[];
+}
+
+export function sourceLabel(source: string): string {
+  if (source === 'income') return 'a drop in income';
+  if (source === 'unexpected_bills') return 'surprise bills';
+  if (source === 'card_and_other') return 'card interest and timing';
+  if (source === 'planned_cash_flow') return 'regular outflows above income';
+  if (source.startsWith('spend:')) return `${source.slice(6).replace('_', ' ')} spending`;
+  return source;
 }
 
 function highCostTargets(s: Schedule) {
@@ -52,9 +80,12 @@ export function annualSaving(s: Schedule, a: number): number {
   return save;
 }
 
+const usdText = (c: number) => `$${Math.round(c / 100).toLocaleString('en-US')}`;
+
 /**
- * @param monthlyOutflowCents essential monthly outflow (book snapshot); the coach never moves cash below
- *        BUFFER_MONTHS × this, the same buffer the carry "fixable leak" uses, so the two always agree.
+ * @param monthlyOutflowCents essential monthly outflow (book snapshot). The coach never moves cash below
+ *        BUFFER_MONTHS × this (same buffer as the carry "fixable leak"), and keeps the chance of running
+ *        low ≤ RISK_CAP.
  */
 export function analyze(s: Schedule, a: Assumptions, seed: number, includeExternal: boolean, monthlyOutflowCents: number): Analysis {
   const months = s.months.length + 1;
@@ -63,6 +94,7 @@ export function analyze(s: Schedule, a: Assumptions, seed: number, includeExtern
   const smallTapes: Tape[] = tapes.slice(0, small.pairs);
   const base: Scenario = { id: 'baseline', label: 'If nothing changes', includeExternal };
   const run = (sc: Scenario, full = false) => runForecast(s, full ? a : small, sc, full ? tapes : smallTapes);
+  const feasible = (r: ForecastResult) => r.pLow <= RISK_CAP;
 
   const baseline = run(base, true);
   const baseSmall = run(base);
@@ -87,10 +119,18 @@ export function analyze(s: Schedule, a: Assumptions, seed: number, includeExtern
   ];
   if (s.card) sensitivities.push(sens('card_apr', 'Card APR 2 points higher', { ...base, id: 'sens_apr', cardAprBumpPct: 2 }));
 
+  // ---- what drives the worst case (expected-shortfall attribution, uncertain part only) ----
+  const uncertain = baseline.sources.filter(x => x.source !== 'planned_cash_flow' && x.esContribution > 0);
+  const uncertainTotal = uncertain.reduce((p, x) => p + x.esContribution, 0);
+  const drivers: Driver[] = uncertain
+    .map(x => ({ source: x.source, label: sourceLabel(x.source), esContribution: x.esContribution, share: uncertainTotal ? x.esContribution / uncertainTotal : 0 }))
+    .sort((x, y) => y.esContribution - x.esContribution);
+  const top = drivers[0];
+
   // ---- frontier: move cash to high-cost debt ----
   const capacity = highCostTargets(s).reduce((p, t) => p + t.balance, 0);
   const maxMove = Math.max(0, Math.min(s.startLiquid - BUFFER_MONTHS * monthlyOutflowCents, capacity));
-  const pAt = (amt: number) => run({ ...base, id: 'frontier', moveToDebtCents: amt }).pLow;
+  const at = (amt: number) => (amt === 0 ? baseSmall : run({ ...base, id: 'frontier', moveToDebtCents: amt }));
   const frontier: Analysis['frontier'] = [];
   let best = 0;
   if (maxMove > 0) {
@@ -98,89 +138,144 @@ export function analyze(s: Schedule, a: Assumptions, seed: number, includeExtern
     let firstBad = -1;
     for (let i = 0; i <= 10; i++) {
       const amt = Math.round((maxMove * i) / 10);
-      const p = i === 0 ? baseSmall.pLow : pAt(amt);
-      frontier.push({ moveCents: amt, pLow: p, annualSavingCents: annualSaving(s, amt), recommended: false });
-      if (p <= RISK_CAP && firstBad < 0) prevOk = amt;
+      const r = at(amt);
+      frontier.push({ moveCents: amt, pLow: r.pLow, annualSavingCents: annualSaving(s, amt), recommended: false });
+      if (feasible(r) && firstBad < 0) prevOk = amt;
       else if (firstBad < 0) firstBad = amt;
     }
-    if (baseSmall.pLow <= RISK_CAP) {
+    if (feasible(baseSmall)) {
       best = prevOk;
       if (firstBad > 0) {
         let lo = prevOk;
         let hi = firstBad;
         for (let it = 0; it < 6; it++) {
           const mid = Math.round((lo + hi) / 2);
-          if (pAt(mid) <= RISK_CAP) lo = mid;
+          if (feasible(at(mid))) lo = mid;
           else hi = mid;
         }
         best = lo;
       }
       best = Math.floor(best / 10_000) * 10_000; // round down to $100
     }
-    frontier.push({ moveCents: best, pLow: best ? pAt(best) : baseSmall.pLow, annualSavingCents: annualSaving(s, best), recommended: true });
+    const r = at(best);
+    frontier.push({ moveCents: best, pLow: r.pLow, annualSavingCents: annualSaving(s, best), recommended: true });
     frontier.sort((x, y) => x.moveCents - y.moveCents || Number(x.recommended) - Number(y.recommended));
   }
 
   const actions: CoachAction[] = [];
+  // Action effects use the full path set so their numbers match the baseline shown elsewhere.
+  const full = (sc: Partial<Scenario>) => run({ ...base, id: 'action', ...sc }, true);
+  const afterMove = best > 0 ? full({ moveToDebtCents: best }) : baseline;
   if (best > 0) {
-    const after = frontier.find(f => f.recommended)!.pLow;
     actions.push({
       kind: 'move_cash_to_debt',
+      driver: '',
       amountCents: best,
       fraction: best / maxMove,
       annualSavingCents: annualSaving(s, best),
-      pLowBefore: baseSmall.pLow,
-      pLowAfter: after,
-      detail: `Pay down the highest-APR debt first using cash above a ${BUFFER_MONTHS}-month buffer; the chance of running low stays under 5%.`,
+      pLowBefore: baseline.pLow,
+      pLowAfter: afterMove.pLow,
+      esBefore: baseline.es95,
+      esAfter: afterMove.es95,
+      detail: `Pay down the highest-APR debt first with ${usdText(best)} of spare cash. You still keep a ${BUFFER_MONTHS}-month buffer and the chance of running low stays under 5%.`,
     });
   }
 
-  // ---- trim discretionary spending if risk is too high or cash is draining ----
-  const trimScenario = (f: number, extra: Partial<Scenario> = {}): Scenario => ({
+  // ---- spending scenarios used by the driver and gap actions ----
+  const discretionaryMonthly = DISCRETIONARY.reduce((p, c) => p + (s.spend[c].base[0] ?? 0), 0);
+  const trimDisc = (f: number): Scenario => ({
     ...base,
-    ...extra,
     id: 'trim',
     categoryMult: Object.fromEntries(DISCRETIONARY.map(c => [c, 1 - f])) as Partial<Record<Category, number>>,
   });
-  const discretionaryMonthly = DISCRETIONARY.reduce((p, c) => p + (s.spend[c].base[0] ?? 0), 0);
-  if (baseSmall.pLow > RISK_CAP || baseline.deterministicChange < 0) {
-    let f = 0.1;
-    if (baseSmall.pLow > RISK_CAP) {
-      let lo = 0;
-      let hi = MAX_TRIM;
-      if (run(trimScenario(hi)).pLow > RISK_CAP) f = hi;
-      else {
-        for (let it = 0; it < 6; it++) {
-          const mid = (lo + hi) / 2;
-          if (run(trimScenario(mid)).pLow <= RISK_CAP) hi = mid;
-          else lo = mid;
-        }
-        f = Math.ceil(hi * 100) / 100;
-      }
-    }
-    const after = run(trimScenario(f)).pLow;
+  let discFraction = 0; // discretionary trim carried into the coach path
+  let categoryTrim: { cat: Category; f: number } | null = null;
+
+  // ---- structural gap: regular outflows above income ----
+  const monthsInHorizon = a.horizonDays / 30.4;
+  const gap = -baseline.deterministicChange / monthsInHorizon; // cents per month draining
+  if (gap > 0 && discretionaryMonthly > 0) {
+    const f = Math.min(MAX_TRIM, Math.ceil((gap / discretionaryMonthly) * 100) / 100);
+    const r = run(trimDisc(f), true);
+    discFraction = Math.max(discFraction, f);
+    const covered = Math.min(1, (discretionaryMonthly * f) / gap);
     actions.push({
-      kind: 'trim_discretionary',
-      amountCents: Math.round(discretionaryMonthly * f),
-      fraction: f,
-      annualSavingCents: Math.round(discretionaryMonthly * f * 12),
-      pLowBefore: baseSmall.pLow,
-      pLowAfter: after,
+      kind: 'close_monthly_gap', driver: 'planned_cash_flow', amountCents: Math.round(discretionaryMonthly * f), fraction: f,
+      annualSavingCents: Math.round(discretionaryMonthly * f * 12), pLowBefore: baseline.pLow, pLowAfter: r.pLow,
+      esBefore: baseline.es95, esAfter: r.es95,
       detail:
-        baseSmall.pLow > RISK_CAP
-          ? `Trim dining, shopping and other discretionary spending by ${Math.round(f * 100)}% to bring the chance of running low ${after <= RISK_CAP ? 'under' : 'closer to'} 5%.`
-          : `Your cash is drifting down each month; trimming discretionary spending by ${Math.round(f * 100)}% slows the drain.`,
+        `Your regular outflows run about ${usdText(gap)} a month above your income. ` +
+        (covered >= 0.99
+          ? `Trimming extras by ${Math.round(f * 100)}% closes that gap.`
+          : `Trimming extras by ${Math.round(f * 100)}% covers about ${Math.round(covered * 100)}% of it; the rest needs a change in fixed costs or income.`),
+    });
+  } else if (!feasible(baseSmall)) {
+    // risk is above the limits even without a drain: find the trim that brings it back
+    let lo = 0;
+    let hi = MAX_TRIM;
+    let f = hi;
+    if (feasible(run(trimDisc(hi)))) {
+      for (let it = 0; it < 6; it++) {
+        const mid = (lo + hi) / 2;
+        if (feasible(run(trimDisc(mid)))) hi = mid;
+        else lo = mid;
+      }
+      f = Math.ceil(hi * 100) / 100;
+    }
+    const r = run(trimDisc(f), true);
+    discFraction = Math.max(discFraction, f);
+    actions.push({
+      kind: 'trim_discretionary', driver: '', amountCents: Math.round(discretionaryMonthly * f), fraction: f,
+      annualSavingCents: Math.round(discretionaryMonthly * f * 12), pLowBefore: baseline.pLow, pLowAfter: r.pLow,
+      esBefore: baseline.es95, esAfter: r.es95,
+      detail: `Trim dining, shopping and other extras by ${Math.round(f * 100)}% to bring your risk ${feasible(r) ? 'back within' : 'closer to'} safe limits.`,
     });
   }
 
-  // ---- the "following the coach" path ----
-  const trim = actions.find(x => x.kind === 'trim_discretionary');
-  const coachScenario: Scenario = {
-    ...(trim ? trimScenario(trim.fraction) : base),
-    id: 'coach',
-    label: 'Following the coach',
-    moveToDebtCents: best,
-  };
-  const coach = run(coachScenario, true);
-  return { baseline, coach, stresses, sensitivities, frontier, actions };
+  // ---- action aimed at the biggest driver of a bad outcome ----
+  if (top) {
+    const pct = Math.round(top.share * 100);
+    if (top.source.startsWith('spend:')) {
+      const cat = top.source.slice(6) as Category;
+      const f = 0.1;
+      const r = full({ categoryMult: { [cat]: 1 - f } });
+      categoryTrim = { cat, f };
+      const monthly = (s.spend[cat].base[0] ?? 0) * f;
+      actions.push({
+        kind: 'trim_category', driver: top.source, amountCents: Math.round(monthly), fraction: f,
+        annualSavingCents: Math.round(monthly * 12), pLowBefore: baseline.pLow, pLowAfter: r.pLow,
+        esBefore: baseline.es95, esAfter: r.es95,
+        detail: `${top.label[0].toUpperCase()}${top.label.slice(1)} is the biggest swing factor in your bad outcomes (${pct}% of the uncertain part). Trimming it by 10% targets that risk directly.`,
+      });
+    } else if (top.source === 'income') {
+      // Income risk is answered by the cash buffer the coach always keeps; add a trim only if none is planned yet.
+      const f = discFraction > 0 ? 0 : 0.1;
+      const r = f ? run(trimDisc(f), true) : baseline;
+      discFraction = Math.max(discFraction, f);
+      actions.push({
+        kind: 'protect_income', driver: top.source, amountCents: Math.round(discretionaryMonthly * f), fraction: f,
+        annualSavingCents: Math.round(discretionaryMonthly * f * 12), pLowBefore: baseline.pLow, pLowAfter: r.pLow,
+        esBefore: baseline.es95, esAfter: r.es95,
+        detail:
+          `A drop in income drives ${pct}% of the uncertain part of your worst outcomes, which is why the coach always leaves a ${BUFFER_MONTHS}-month cash buffer` +
+          (f ? ` and suggests trimming extras by 10% to grow it.` : `.`),
+      });
+    } else if (top.source === 'unexpected_bills') {
+      const reserve = Math.round(a.jumpMedianCents * Math.exp(1.645 * a.jumpSigma)); // a 1-in-20 surprise bill
+      const withLessMove = full({ moveToDebtCents: Math.max(0, best - reserve) });
+      actions.push({
+        kind: 'reserve_for_surprises', driver: top.source, amountCents: reserve, fraction: 0,
+        annualSavingCents: 0, pLowBefore: afterMove.pLow, pLowAfter: withLessMove.pLow,
+        esBefore: afterMove.es95, esAfter: withLessMove.es95,
+        detail: `Surprise bills drive ${pct}% of the uncertain part of your worst outcomes. Keep about ${usdText(reserve)} set aside for them in your Reserve account.`,
+      });
+    }
+  }
+
+  // ---- the "following the coach" path: every recommended change together ----
+  const mult: Partial<Record<Category, number>> = {};
+  if (discFraction > 0) for (const c of DISCRETIONARY) mult[c] = 1 - discFraction;
+  if (categoryTrim) mult[categoryTrim.cat] = Math.min(mult[categoryTrim.cat] ?? 1, 1 - categoryTrim.f);
+  const coach = run({ ...base, id: 'coach', label: 'Following the coach', moveToDebtCents: best, categoryMult: mult }, true);
+  return { baseline, coach, stresses, sensitivities, frontier, actions, drivers };
 }

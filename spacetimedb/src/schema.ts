@@ -306,6 +306,9 @@ export const coachAction = table(
     p_low_before: t.f64(),
     p_low_after: t.f64(),
     detail: t.string(),
+    driver: t.string().default(''), // risk source this action targets ('' if none)
+    es_before_cents: t.f64().default(0), // average loss of cash in the worst 5% of futures, before
+    es_after_cents: t.f64().default(0), // and after this action
   }
 );
 

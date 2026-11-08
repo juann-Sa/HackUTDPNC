@@ -306,6 +306,8 @@ export interface ForecastResult {
   pLowSe: number;
   var95: number;
   es95: number;
+  /** Average ending cash across the worst 5% of futures (same tail as ES95). */
+  tailEndLiquid: number;
   mddP50: number;
   mddP95: number;
   endLiquid: { p5: number; p50: number; p95: number };
@@ -350,6 +352,7 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
   const q05 = quantile(sortedChange, 0.05);
   const tail = change.map((v, i) => [v, i] as const).filter(([v]) => v <= q05);
   const es95 = -tail.reduce((s2, [v]) => s2 + v, 0) / tail.length;
+  const tailEndLiquid = tail.reduce((s2, [, i]) => s2 + paths[i].liquid[H], 0) / tail.length;
   const mdd = Float64Array.from(
     paths.map(p => {
       let peak = -Infinity;
@@ -393,6 +396,7 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
     pLowSe,
     var95: -q05,
     es95,
+    tailEndLiquid,
     mddP50: quantile(mdd, 0.5),
     mddP95: quantile(mdd, 0.95),
     endLiquid: { p5: quantile(endL, 0.05), p50: quantile(endL, 0.5), p95: quantile(endL, 0.95) },
