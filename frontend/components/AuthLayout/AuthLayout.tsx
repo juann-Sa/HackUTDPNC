@@ -1,13 +1,12 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import './AuthLayout.css'
+import FinancialPictureDiagram from './FinancialPictureDiagram'
 
 function Logo() {
   return (
     <div className="brand-logo">
-      <span className="brand-logo__mark">PNC</span>
-      <span className="brand-logo__divider" aria-hidden="true" />
-      <span className="brand-logo__product">360° Financial Advisor</span>
+      <span className="brand-logo__mark" style={{ color: "#F58025" }}>Orbit360°</span>
     </div>
   )
 }
@@ -37,26 +36,10 @@ export default function AuthLayout({
 }: AuthLayoutProps) {
   return (
     <div className="auth">
+      <header className="auth__top"><div className="auth__top-inner"><Logo /></div></header>
       <aside className="auth__brand">
-        <div className="auth__brand-top">
-          <Logo />
-        </div>
 
-        <div className="auth__brand-body">
-          <h1 className="auth__brand-title">See your whole financial picture.</h1>
-          <p className="auth__brand-text">
-            Accounts, savings and goals in one place — with a coach that explains the
-            numbers in plain language.
-          </p>
-          <ul className="auth__brand-list">
-            <li>Consolidate every account into one profile</li>
-            <li>Understand your financial health at a glance</li>
-            <li>Plan your next move with confidence</li>
-          </ul>
-        </div>
-
-        <span className="auth__blob auth__blob--1" aria-hidden="true" />
-        <span className="auth__blob auth__blob--2" aria-hidden="true" />
+        <div className="auth__brand-body"><FinancialPictureDiagram /></div>
       </aside>
 
       <main className="auth__panel">

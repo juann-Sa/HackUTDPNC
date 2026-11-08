@@ -10,6 +10,10 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import dynamic from "next/dynamic";
+import { planetOutcome } from "./financial-planet/planet-model";
+import "./financial-planet/planet.css";
+const FinancialPlanet=dynamic(()=>import("./financial-planet/FinancialPlanet"),{ssr:false});
 import AppHeader from "@/components/AppHeader";
 import CoachPanel from "@/components/coach-panel";
 import LiveDataProvider, { useLiveData } from "@/components/live-data-provider";
@@ -174,7 +178,7 @@ function BigPurchasePanel({
     <section className="future-panel future-purchase" aria-labelledby="future-purchase-title">
       <div className="panel-heading">
         <div>
-          <h2 id="future-purchase-title">Making a big purchase?</h2>
+          <h2 id="future-purchase-title">Major purchase</h2>
         </div>
       </div>
       <div className="future-purchase-fields">
@@ -361,6 +365,7 @@ function ScenarioControlPanel({
 }
 
 function FutureDashboardContent() {
+  const [visualMode,setVisualMode]=useState<"chart"|"planet">("chart");
   const { customerId, data, error, loading, call } = useLiveData();
   const [controls, setControls] = useState<ScenarioControls>(DEFAULT_CONTROLS);
   const [coachControls, setCoachControls] = useState<ScenarioControls | null>(null);
@@ -425,6 +430,12 @@ function FutureDashboardContent() {
       })),
     [activeScenarioForecast, baselinePoints],
   );
+  const planet=useMemo(()=>{
+    const baseline=baselinePoints.map(point=>({day:point.day_offset,midCents:point.continue_mid_cents,lowCents:point.continue_low_cents}));
+    const active=userForecast.length?userForecast:coachForecast;
+    const scenario=active.length?active.map(point=>({day:point.day_offset,midCents:point.mid_cents,lowCents:point.low_cents})):baseline;
+    return data?.customer[0]?.customer_id===customerId ? planetOutcome(scenario,baseline,data?.book_snapshot[0]?.monthly_outflow_cents??null) : planetOutcome([],[],null);
+  },[baselinePoints,userForecast,coachForecast,data,customerId]);
   const formatDate = (iso: string) =>
     new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 
@@ -555,6 +566,8 @@ function FutureDashboardContent() {
                   <h2 id="future-forecast-title">180-day Outlook</h2>
                 </div>
               </div>
+              <div className="future-mode-toggle" role="group" aria-label="Forecast visualization mode"><button type="button" aria-pressed={visualMode==='chart'} onClick={()=>setVisualMode('chart')}>Chart View</button><button type="button" aria-pressed={visualMode==='planet'} onClick={()=>setVisualMode('planet')}>Financial Planet</button></div>
+              {visualMode==='planet' ? <FinancialPlanet outcome={planet} updating={saving} source={activeScenarioName??'Your current path'} /> : <>
               <div className="future-legend" aria-label="Forecast lines">
                 <span><i className="baseline-key" />Your current path</span>
                 {activeScenarioName && (
@@ -630,6 +643,7 @@ function FutureDashboardContent() {
                   </ResponsiveContainer>
                 </div>
               )}
+              </>} 
             </section>
             <BigPurchasePanel
               kind={controls.purchaseKind}

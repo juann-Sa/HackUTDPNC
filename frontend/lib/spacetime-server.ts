@@ -1,3 +1,4 @@
+
 // Server-only SpacetimeDB access over its HTTP API (used by the app/api routes).
 // The browser never talks to SpacetimeDB directly: no generated bindings, no CORS, and only
 // read queries built here plus a short list of reducers can run.

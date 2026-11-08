@@ -1,0 +1,11 @@
+﻿import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {planetOutcome} from './planet-model.ts';
+const forecast=(mid,low=mid*.8)=>Array.from({length:181},(_,day)=>({day,midCents:mid,lowCents:low}));
+test('a strong full-period buffer thrives',()=>assert.equal(planetOutcome(forecast(70000,60000),forecast(40000),10000).state,'thriving'));
+test('a positive but modest buffer is balanced',()=>assert.equal(planetOutcome(forecast(25000,15000),forecast(40000),10000).state,'balanced'));
+test('a forecast shortfall is under pressure even with a strong final value',()=>{const points=forecast(70000,60000);points[25]={day:25,midCents:-100,lowCents:-300};assert.equal(planetOutcome(points,forecast(40000),10000).state,'pressure');});
+test('an uncertain negative lower band counts as pressure',()=>assert.equal(planetOutcome(forecast(30000,-100),forecast(40000),10000).state,'pressure'));
+test('insufficient data remains neutral',()=>{assert.equal(planetOutcome([],[],10000).state,'unknown');assert.equal(planetOutcome(forecast(70000),[],0).state,'unknown');assert.equal(planetOutcome(forecast(70000).slice(1),[],10000).state,'unknown');});
+test('an ordinary reduction in savings is not automatically pressure',()=>assert.equal(planetOutcome(forecast(40000,25000),forecast(50000,40000),10000).state,'balanced'));
+test('explanations use actual scenario and baseline values',()=>{const outcome=planetOutcome(forecast(25000,15000),forecast(40000),10000);assert.equal(outcome.coverage,2.5);assert.equal(outcome.baselineCoverage,4);assert.match(outcome.reason,/4.0 months.*2.5 months/);});

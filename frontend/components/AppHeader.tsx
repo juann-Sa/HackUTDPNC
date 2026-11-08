@@ -16,7 +16,7 @@ export default function AppHeader({ current }: { current: AppSection }) {
     try { setCustomer(localStorage.getItem('pnc-navigator-customer-v1') || 'C006') } catch { /* storage unavailable */ }
   }, [])
   return <div className="pnc-dash health-header"><header className="topbar"><div className="nav-inner">
-    <Link className="brand" href="/home" aria-label="PNC home">PNC</Link>
+    <Link className="brand" style={{ color: "#F58025" }} href="/home" aria-label="Orbit360° home">Orbit360°</Link>
     <MainNav current={current} variant="dash" />
     <div className="account-wrap" onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false) }} onKeyDown={event => { if (event.key === 'Escape') setOpen(false) }}>
       <button className="account-button" aria-label="My Account" onClick={() => router.push("/account")}><span className="avatar"><UserRound size={17} /></span><span>{customer}</span></button><button className="account-options-button" aria-label="Account options" aria-expanded={open} onClick={() => setOpen(!open)}><ChevronDown size={14} /></button>
