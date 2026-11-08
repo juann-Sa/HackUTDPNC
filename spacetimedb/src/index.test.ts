@@ -467,3 +467,28 @@ describe('goals', () => {
     writeFileSync('/tmp/st360_goals_text.txt', text);
   }, 120_000);
 });
+
+describe('danger days', () => {
+  const { test } = loadedHarness();
+  const out: string[] = [];
+  for (const cid of ['C006', 'C002', 'C027', 'C018']) {
+    test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: cid, include_external: false }));
+    const days = [...test.db.dangerDay.customer_id.filter(cid)].sort((a, b) => a.day_index - b.day_index);
+    const worst = [...days].sort((a, b) => b.p_below - a.p_below).slice(0, 3);
+    const first = days.find(d => d.p_below >= 0.1);
+    out.push(`${cid}: first >=10% ${first ? first.date + ' ' + first.p_below.toFixed(2) + ' [' + first.reasons + ']' : 'none'} | worst ${worst.map(d => d.date + ' ' + d.p_below.toFixed(2)).join(', ')} | start chk p10 ${days[0].checking_low_cents}`);
+  }
+  writeFileSync('/tmp/st360_danger.txt', out.join('\n'));
+
+  it('scores every forecast day for checking, with reasons', () => {
+    const days = [...test.db.dangerDay.customer_id.filter('C006')].sort((a, b) => a.day_index - b.day_index);
+    expect(days.length).toBe(180);
+    expect(days[0].date).toBe('2026-11-01');
+    for (const d of days) expect(d.p_below >= d.p_negative && d.p_below <= 1).toBe(true);
+    expect(days.find(d => d.date === '2026-11-03')!.reasons).toMatch(/rent\/housing/);
+    // Black Friday goes on the card; checking feels it when the card is paid on the 28th
+    expect(days.find(d => d.date === '2026-11-28')!.reasons).toMatch(/card payment/);
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'risk' });
+    expect(text).toMatch(/checking/);
+  }, 120_000);
+});

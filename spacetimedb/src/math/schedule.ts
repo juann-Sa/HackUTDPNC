@@ -41,6 +41,10 @@ export interface Schedule {
   startLiquid: number;
   savingsBalance: number;
   savingsYieldPct: number;
+  /** Average monthly change of the savings account by day of month (payroll split, transfers, interest). */
+  savingsFlows: { day: number; cents: number }[];
+  /** Cash in linked outside accounts (counted in liquid, but not in this bank's checking). */
+  externalLiquid: number;
   /** Paychecks: day of month → average cents per month. */
   income: { day: number; cents: number }[];
   incomeSigma: number;
@@ -276,6 +280,14 @@ export function buildSchedule(
   const sigmaLevel = Math.sqrt(sigmaShared ** 2 + sigmaIdio ** 2 / CATEGORIES.length) / Math.sqrt(LEVEL_MONTHS);
 
   const savings = acct('savings')[0];
+  const savFlow = new Map<number, number>();
+  if (savings)
+    for (const x of ledger)
+      if (x.account_id === savings.account_id && flowMonths.has(ym(x.posted_date))) {
+        const day = Number(x.posted_date.slice(8, 10));
+        savFlow.set(day, (savFlow.get(day) ?? 0) + x.balance_change_cents / nFlow);
+      }
+  const externalLiquid = external.filter(x => liquidTypes.has(x.account_type)).reduce((p, x) => p + x.balance_cents, 0);
   for (const x of external) {
     if (['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(x.account_type))
       loans.push({ accountId: x.account_id, type: x.account_type, balance: x.balance_cents, aprPct: x.apr_pct, payment: x.monthly_payment_cents, day: 15, feePerMonth: 0 });
@@ -288,6 +300,8 @@ export function buildSchedule(
     startLiquid,
     savingsBalance: savings?.balance_cents ?? 0,
     savingsYieldPct: savings?.annual_yield_pct ?? 0,
+    savingsFlows: [...savFlow.entries()].sort((x, y) => x[0] - y[0]).map(([day, cents]) => ({ day, cents })),
+    externalLiquid,
     income: [...incomeByDay.entries()].sort((x, y) => x[0] - y[0]).map(([day, cents]) => ({ day, cents })),
     incomeSigma,
     spend,

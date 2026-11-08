@@ -407,6 +407,22 @@ export const backtestOverall = table(
   }
 );
 
+// ---------- danger days: predicted low-cash days in checking (PNC Low Cash Mode, but ahead of time) ----------
+export const dangerDay = table(
+  { name: 'danger_day', public: true },
+  {
+    danger_id: t.string().primaryKey(), // customer_id|date
+    customer_id: t.string().index('btree'),
+    date: t.string(),
+    day_index: t.u32(),
+    threshold_cents: t.f64(),
+    p_below: t.f64(), // chance checking ends the day below the threshold
+    p_negative: t.f64(), // chance checking ends the day below zero
+    checking_low_cents: t.f64(), // 10th percentile of checking that day
+    reasons: t.string(), // biggest scheduled outflows that day, e.g. "rent/housing, card payment"
+  }
+);
+
 // ---------- goals: chance of reaching a money target by a date ----------
 export const goal = table(
   { name: 'goal', public: true },
@@ -484,6 +500,7 @@ const spacetimedb = schema({
   backtestOverall,
   goal,
   goalResult,
+  dangerDay,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:

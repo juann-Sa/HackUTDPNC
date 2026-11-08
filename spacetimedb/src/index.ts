@@ -359,6 +359,15 @@ export const run_forecast = spacetimedb.reducer(
     const an = analyze(schedule, a, seed, include_external, snap.monthly_outflow_cents);
     for (const f of [an.baseline, an.coach, ...an.stresses]) writeForecast(ctx, cid, f, a);
 
+    // Danger days from the baseline (life events included).
+    for (const r of [...ctx.db.dangerDay.customer_id.filter(cid)]) ctx.db.dangerDay.danger_id.delete(r.danger_id);
+    an.baseline.danger.forEach((d, i) =>
+      ctx.db.dangerDay.insert({
+        danger_id: `${cid}|${d.date}`, customer_id: cid, date: d.date, day_index: i + 1, threshold_cents: a.dangerThresholdCents,
+        p_below: d.pBelow, p_negative: d.pNegative, checking_low_cents: round(d.checkingP10), reasons: d.reasons,
+      })
+    );
+
     // Habit view: the two lines on the 360° chart, same random draws, life events off.
     const h = habitAssumptions(a);
     const tapes = makeTapes(seed, h, schedule.months.length + 1);
@@ -554,6 +563,15 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
                 : '')
           : '; saving more alone would not get there in time';
     add('goal', `Goal "${g.name}" (${what} by ${longDate(g.target_date)}): chance of reaching it ${pct(r.p_success, 0)}${plan}`);
+  }
+  const dangers = [...ctx.db.dangerDay.customer_id.filter(cid)].sort((x, y) => x.day_index - y.day_index);
+  if (dangers.length) {
+    const next = dangers.find(d => d.p_below >= 0.1);
+    const M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const when = (iso: string) => `${M[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+    if (next)
+      add('danger', `Next day your checking could dip below ${usd(next.threshold_cents)}: ${when(next.date)} (${pct(next.p_below, 0)} chance)${next.reasons ? `, when ${next.reasons} come out` : ''}`);
+    else add('danger', `No day in the next 180 has more than a 10% chance of checking dipping below ${usd(dangers[0].threshold_cents)}`);
   }
   return f;
 }

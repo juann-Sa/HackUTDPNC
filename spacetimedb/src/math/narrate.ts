@@ -83,6 +83,7 @@ export const FACT_TERMS: Record<string, string[]> = {
   dip: ['dip', 'drop', 'fall', 'low point', 'swing', 'down', 'worse'],
   top_risk: ['driver', 'risk', 'biggest', 'main', 'worst', 'bad', 'drive', 'uncertain'],
   top_lever: ['lever', 'help', 'most', 'biggest', 'cut', 'lower', 'change', 'more cash', 'boost'],
+  danger: ['checking', 'dip', 'below', 'danger', 'low', 'chance', 'day'],
   goal: ['goal', 'chance', 'reach', 'save', 'month', 'target', 'by', 'raise', 'cash'],
 };
 
@@ -179,10 +180,10 @@ export function templateText(topic: string, facts: Fact[]): string {
   const order: Record<string, string[]> = {
     overview: ['net_cash_today', 'organic_6m', 'external_6m', 'continue_180', 'coach_180', 'top_risk', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim'],
     past: ['income_6m', 'spending_6m', 'debt_interest_6m', 'external_6m', 'organic_6m'],
-    future: ['continue_180', 'coach_180', 'coach_gain', 'band_note'],
+    future: ['continue_180', 'coach_180', 'coach_gain', 'band_note', 'danger'],
     coach: ['action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
     goals: ['goal'],
-    risk: ['p_low', 'es_worst', 'top_risk', 'dip', 'stress_job_loss', 'stress_bill', 'top_lever', 'runway'],
+    risk: ['p_low', 'danger', 'es_worst', 'top_risk', 'dip', 'stress_job_loss', 'stress_bill', 'top_lever', 'runway'],
   };
   const lines = pick(order[topic] ?? order.overview);
   return lines.length ? `${lines.join('. ')}.` : 'Not enough data yet to explain this view.';

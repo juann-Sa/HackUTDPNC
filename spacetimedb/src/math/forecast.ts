@@ -24,6 +24,8 @@ export interface Assumptions {
   incomeWhileUnemployed: number; // fraction of paycheck
   iraMu: number;
   iraSigma: number;
+  /** Checking ("Spend") balance below which a day counts as a danger day (PNC Low Cash Mode style). */
+  dangerThresholdCents: number;
 }
 
 export const DEFAULT_ASSUMPTIONS: Assumptions = {
@@ -39,6 +41,7 @@ export const DEFAULT_ASSUMPTIONS: Assumptions = {
   incomeWhileUnemployed: 0,
   iraMu: 0.07,
   iraSigma: 0.15,
+  dangerThresholdCents: 10_000,
 };
 
 /**
@@ -100,7 +103,9 @@ function buildCalendar(s: Schedule, horizonDays: number): Calendar {
     if (m !== curM) {
       mi++;
       curM = m;
-      cal.events.push(eventsFor(y, m).map(e => ({ day: e.day, share: e.share, category: e.category })));
+      const evs = eventsFor(y, m);
+      for (const e of evs) eventLabel.set(`${y}-${String(m).padStart(2, '0')}-${String(e.day).padStart(2, '0')}|${e.category}`, e.name);
+      cal.events.push(evs.map(e => ({ day: e.day, share: e.share, category: e.category })));
     }
     cal.iso.push(iso);
     cal.monthIdx.push(mi);
@@ -290,6 +295,38 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
   return { liquid, netCash, endNetWorth, dev };
 }
 
+/** The biggest scheduled outflows on a forecast day (expected amounts), as a short readable list. */
+function dayReasons(s: Schedule, cal: Calendar, k: number): string {
+  const mi = cal.monthIdx[k];
+  const dom = cal.dom[k];
+  const iso = cal.iso[k];
+  const last = lastDayOfMonth(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)));
+  const items: { label: string; cents: number }[] = [];
+  const evs = cal.events[mi];
+  for (const c of CATEGORIES) {
+    const sp = s.spend[c];
+    const share = dayShare(evs, c, sp.cashDay, dom, last);
+    if (!share) continue;
+    const ev = evs.find(e => e.category === c && e.day === dom);
+    const name = ev ? (eventLabel.get(`${iso}|${c}`) ?? c.replace('_', ' ')) : c === 'housing' ? 'rent/housing' : c.replace('_', ' ');
+    items.push({ label: name, cents: (sp.base[mi] ?? 0) * (1 - sp.cardShare) * share });
+  }
+  if (s.card && dom === Math.min(s.card.payDay, last)) {
+    const purchases = CATEGORIES.reduce((p, c) => p + (s.spend[c].base[mi] ?? 0) * s.spend[c].cardShare, 0);
+    items.push({ label: 'card payment', cents: purchases + (s.card.balance * s.card.aprPct) / 1200 });
+  }
+  for (const l of s.loans) if (dom === Math.min(l.day, last)) items.push({ label: `${l.type.replace('_', ' ')} payment`, cents: l.payment });
+  for (const l of s.locked) if (dom === Math.min(l.day, last) && l.contribution > 0) items.push({ label: `${l.type.toUpperCase()} contribution`, cents: l.contribution });
+  return items
+    .filter(i => i.cents >= 2_000)
+    .sort((x, y) => y.cents - x.cents)
+    .slice(0, 3)
+    .map(i => i.label)
+    .join(', ');
+}
+
+const eventLabel = new Map<string, string>();
+
 export function quantile(sorted: Float64Array | number[], p: number): number {
   const n = sorted.length;
   if (!n) return 0;
@@ -316,6 +353,8 @@ export interface ForecastResult {
   endLiquid: { p5: number; p50: number; p95: number };
   endNetWorth: { p5: number; p50: number; p95: number };
   deterministicChange: number;
+  /** Per future day: chance checking dips below the danger threshold / below zero, 10th percentile, why. */
+  danger: { date: string; pBelow: number; pNegative: number; checkingP10: number; reasons: string }[];
   /** variance share and expected-shortfall contribution per source */
   sources: { source: string; varShare: number; esContribution: number }[];
 }
@@ -390,8 +429,34 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
   // The certain part of the worst case: scheduled outflows minus income with no surprises.
   // With it, Σ esContribution = ES95 exactly.
   sources.unshift({ source: 'planned_cash_flow', varShare: 0, esContribution: -detChange });
+  // ---- danger days: checking = liquid − (scheduled savings balance + linked outside cash) ----
+  const savPath = new Float64Array(H + 1);
+  let sav = s.savingsBalance + s.externalLiquid;
+  savPath[0] = sav;
+  for (let k = 0; k < H; k++) {
+    const iso = cal.iso[k];
+    const last = lastDayOfMonth(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)));
+    for (const f of s.savingsFlows) if (f.day === cal.dom[k] || (f.day > last && cal.dom[k] === last)) sav += f.cents;
+    savPath[k + 1] = sav;
+  }
+  const danger: ForecastResult['danger'] = [];
+  const chk = new Float64Array(N);
+  for (let d = 1; d <= H; d++) {
+    let below = 0;
+    let neg = 0;
+    for (let i = 0; i < N; i++) {
+      const c = paths[i].liquid[d] - savPath[d];
+      chk[i] = c;
+      if (c < a.dangerThresholdCents) below++;
+      if (c < 0) neg++;
+    }
+    chk.sort();
+    danger.push({ date: cal.iso[d - 1], pBelow: below / N, pNegative: neg / N, checkingP10: quantile(chk, 0.1), reasons: dayReasons(s, cal, d - 1) });
+  }
+
   return {
     scenario: sc,
+    danger,
     dates: [isoFromDayNumber(dayNumber(s.asOf)), ...cal.iso],
     bands,
     netCashBands,
