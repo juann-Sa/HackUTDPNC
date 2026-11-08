@@ -1,0 +1,142 @@
+.dashboard {
+  width: min(1200px, 100%);
+  margin: 0 auto;
+  padding: clamp(1.25rem, 4vw, 3rem);
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+}
+
+.dashboard-header h1 {
+  margin: 0.25rem 0 0.5rem;
+}
+
+.dashboard-header p {
+  color: #64748b;
+}
+
+.eyebrow {
+  color: #16834a !important;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.connection {
+  flex: 0 0 auto;
+  padding: 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #991b1b;
+  font-size: 0.875rem;
+}
+
+.connection.connected {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.projection-panel {
+  padding: clamp(1rem, 3vw, 1.5rem);
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(15 23 42 / 5%);
+}
+
+.customer-form {
+  display: grid;
+  grid-template-columns: auto minmax(12rem, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.customer-form label,
+.projection-heading h2 {
+  font-weight: 700;
+}
+
+.customer-form input {
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  font-family: inherit;
+}
+
+.customer-form button {
+  font-family: inherit;
+}
+
+.customer-form button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.status {
+  margin-top: 0.75rem;
+  color: #475569;
+}
+
+.projection-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 2rem 0 0.75rem;
+}
+
+.projection-heading h2 {
+  font-size: 1.15rem;
+}
+
+.projection-heading span,
+.empty-state {
+  color: #64748b;
+}
+
+.empty-state {
+  padding: 1.5rem;
+  border-radius: 0.5rem;
+  background: #f8fafc;
+  text-align: center;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  white-space: nowrap;
+}
+
+th,
+td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+th {
+  color: #475569;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+@media (max-width: 700px) {
+  .dashboard-header {
+    flex-direction: column;
+  }
+
+  .customer-form {
+    grid-template-columns: 1fr;
+  }
+}
