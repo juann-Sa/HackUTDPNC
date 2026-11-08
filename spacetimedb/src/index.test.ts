@@ -492,3 +492,27 @@ describe('danger days', () => {
     expect(text).toMatch(/checking/);
   }, 120_000);
 });
+
+describe('ask procedure and the what-if line', () => {
+  const { test } = loadedHarness();
+  it('explains it needs the AI connection when there is no key, and records the question', () => {
+    const reply = m.ask(test.procedureContext(stranger), { customer_id: 'C006', question: 'Can I afford a $2,000 trip next month?' });
+    expect(reply).toMatch(/GROQ_API_KEY/);
+    expect([...test.db.qa.customer_id.filter('C006')].length).toBe(1);
+  });
+  it('run_what_if draws the third line on the 360° chart', () => {
+    const line = (oneOff: number) => {
+      test.withReducerTx(stranger, ctx => m.run_what_if(ctx, {
+        customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: oneOff,
+        one_off_day: 30, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+      }));
+      return [...test.db.timelineWhatif.customer_id.filter('C006')].sort((a, b) => a.day_offset - b.day_offset);
+    };
+    const none = line(0);
+    const trip = line(200_000);
+    expect(trip.length).toBe(181);
+    expect(trip[0].label).toBe('Your what-if');
+    // same random draws: the $2,000 trip shows up as almost exactly $2,000 less by the end
+    expect(Math.abs(none[180].mid_cents - trip[180].mid_cents - 200_000)).toBeLessThan(10_000);
+  }, 60_000);
+});

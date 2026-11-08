@@ -3,7 +3,7 @@
 // Reducers never return data: every result lands in a public table that the
 // frontend subscribes to (see schema.ts).
 // ─────────────────────────────────────────────────────────────────────────────
-import { t, SenderError, type InferSchema, type ReducerCtx } from 'spacetimedb/server';
+import { t, SenderError, type InferSchema, type ProcedureCtx, type ReducerCtx } from 'spacetimedb/server';
 import spacetimedb, { account, customer, ledgerEntry, statement } from './schema';
 import { computeCarry, computeSnapshot } from './math/book';
 import { computePnl, computeSpending } from './math/pnl';
@@ -17,6 +17,7 @@ import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 import { backtestCustomer } from './math/backtest';
 import { GOAL_KINDS, MAX_GOAL_DAYS, evaluateGoal } from './math/goals';
+import { ANSWER_ASK, PARSE_PROMPT, evaluateQuestion, parseScenario } from './math/ask';
 
 export default spacetimedb;
 
@@ -420,6 +421,16 @@ export const run_forecast = spacetimedb.reducer(
   }
 );
 
+function writeWhatifLine(ctx: Ctx, cid: string, f: ForecastResult, label: string) {
+  for (const r of [...ctx.db.timelineWhatif.customer_id.filter(cid)]) ctx.db.timelineWhatif.whatif_id.delete(r.whatif_id);
+  f.netCashBands.forEach((b, i) =>
+    ctx.db.timelineWhatif.insert({
+      whatif_id: `${cid}|${i}`, customer_id: cid, day_offset: i, date: f.dates[i],
+      low_cents: round(b.p5), mid_cents: round(b.p50), high_cents: round(b.p95), label,
+    })
+  );
+}
+
 const CategoryMult = t.object('CategoryMult', { category: t.string(), mult: t.f64() });
 
 /** What-if simulator: one custom scenario on the same random draws as the baseline (shared live). */
@@ -451,6 +462,9 @@ export const run_what_if = spacetimedb.reducer(
       cardAprBumpPct: args.card_apr_bump_pct,
     };
     writeForecast(ctx, args.customer_id, runForecast(schedule, a, sc, tapes), a);
+    // third line on the 360° chart: same habit view and net-cash measure as the other two lines
+    const h = habitAssumptions(a);
+    writeWhatifLine(ctx, args.customer_id, runForecast(schedule, h, sc, makeTapes(seedFromString(args.customer_id), h, schedule.months.length + 1)), 'Your what-if');
   }
 );
 
@@ -579,6 +593,59 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
 const TOPICS = new Set(['overview', 'past', 'future', 'coach', 'risk', 'goals']);
 
 /** Explain a customer's numbers in plain language. Falls back to a template if the AI reply fails the number check. */
+type PCtx = ProcedureCtx<InferSchema<typeof spacetimedb>>;
+type Msg = { role: string; content: string };
+
+function groqEnv(ctx: PCtx) {
+  const env = (k: 'GROQ_API_KEY' | 'GROQ_MODEL') => {
+    try {
+      return ctx.env.get(k) ?? null;
+    } catch {
+      return null; // environment unavailable (e.g. unit tests): callers fall back to templates
+    }
+  };
+  return { key: env('GROQ_API_KEY'), model: env('GROQ_MODEL') || DEFAULT_MODEL };
+}
+
+/** One Groq chat completion. Returns the reply text, or an error description. */
+function groqChat(ctx: PCtx, key: string, model: string, messages: Msg[], json = false): { text: string; error: string } {
+  try {
+    const res = ctx.http.fetch(GROQ_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model, temperature: 0.2, max_completion_tokens: 700, reasoning_effort: 'low', messages,
+        ...(json ? { response_format: { type: 'json_object' } } : {}),
+      }),
+    });
+    if (res.status !== 200) return { text: '', error: `groq http ${res.status}` };
+    const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
+    return out ? { text: out, error: '' } : { text: '', error: 'empty reply' };
+  } catch (e) {
+    return { text: '', error: `groq error: ${String(e).slice(0, 200)}` };
+  }
+}
+
+/** Ask Groq to explain `facts`; every number and label is audited, one corrective retry, else the fallback. */
+function explainWithAudit(ctx: PCtx, facts: Fact[], ask: string, fallback: string) {
+  const { key, model } = groqEnv(ctx);
+  if (!key) return { text: fallback, source: 'template', model: 'template', rejected: 'no GROQ_API_KEY set' };
+  const messages: Msg[] = [
+    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'user', content: `${ask}\n\nFacts:\n${facts.map(f => `- ${f.text}`).join('\n')}` },
+  ];
+  let rejected = '';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const r = groqChat(ctx, key, model, messages);
+    if (r.error) return { text: fallback, source: 'template', model: 'template', rejected: r.error };
+    const audit = auditReply(r.text, facts);
+    if (audit.ok) return { text: r.text, source: 'groq', model, rejected: attempt ? `fixed on retry (${rejected})` : '' };
+    rejected = `attempt ${attempt + 1}: ${audit.problems.slice(0, 5).join('; ')}`;
+    messages.push({ role: 'assistant', content: r.text }, { role: 'user', content: audit.feedback });
+  }
+  return { text: fallback, source: 'template', model: 'template', rejected };
+}
+
 export const narrate = spacetimedb.procedure(
   { customer_id: t.string(), topic: t.string() },
   t.string(),
@@ -591,64 +658,17 @@ export const narrate = spacetimedb.procedure(
     } catch (e) {
       return `No results for ${cid} yet. Load the data and call recompute_customer (and run_forecast) first.`;
     }
-    const env = (k: 'GROQ_API_KEY' | 'GROQ_MODEL') => {
-      try {
-        return ctx.env.get(k) ?? null;
-      } catch {
-        return null; // environment unavailable (e.g. unit tests): fall back to the template
-      }
-    };
-    const key = env('GROQ_API_KEY');
-    const model = env('GROQ_MODEL') || DEFAULT_MODEL;
-    let text = templateText(topic, facts);
-    let source = 'template';
-    let rejected = key ? '' : 'no GROQ_API_KEY set';
-    if (key) {
-      // Up to two attempts: if the first reply uses numbers we can't verify, say which and ask again.
-      const messages: { role: string; content: string }[] = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: userPrompt(topic, facts) },
-      ];
-      for (let attempt = 0; attempt < 2; attempt++) {
-        try {
-          const res = ctx.http.fetch(GROQ_URL, {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model, temperature: 0.2, max_completion_tokens: 700, reasoning_effort: 'low', messages }),
-          });
-          if (res.status !== 200) {
-            rejected = `groq http ${res.status}`;
-            break;
-          }
-          const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
-          const audit = auditReply(out, facts);
-          if (!out) rejected = 'empty reply';
-          else if (!audit.ok) {
-            rejected = `attempt ${attempt + 1}: ${audit.problems.slice(0, 5).join('; ')}`;
-            messages.push({ role: 'assistant', content: out });
-            messages.push({ role: 'user', content: audit.feedback });
-            continue;
-          } else {
-            text = out;
-            source = 'groq';
-            rejected = attempt ? `fixed on retry (${rejected})` : '';
-          }
-          break;
-        } catch (e) {
-          rejected = `groq error: ${String(e).slice(0, 200)}`;
-          break;
-        }
-      }
-    }
+    const prompt = userPrompt(topic, facts);
+    const r = explainWithAudit(ctx, facts, prompt.slice(0, prompt.indexOf('\n\nFacts:')), templateText(topic, facts));
     ctx.withTx(tx => {
       const id = `${cid}|${topic}`;
       if (tx.db.narration.narration_id.find(id)) tx.db.narration.narration_id.delete(id);
       tx.db.narration.insert({
-        narration_id: id, customer_id: cid, topic, text, source,
-        model: source === 'groq' ? model : 'template', rejected_reason: rejected, created_at: tx.timestamp,
+        narration_id: id, customer_id: cid, topic, text: r.text, source: r.source,
+        model: r.model, rejected_reason: r.rejected, created_at: tx.timestamp,
       });
     });
-    return text;
+    return r.text;
   }
 );
 
@@ -806,3 +826,61 @@ export const remove_goal = spacetimedb.reducer({ goal_id: t.string() }, (ctx, { 
 export const evaluate_goals = spacetimedb.reducer({ customer_id: t.string() }, (ctx, { customer_id }) => {
   for (const g of [...ctx.db.goal.customer_id.filter(customer_id)]) evaluateOne(ctx, g);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Free-form questions: Groq translates, the engine computes, Groq explains, code audits.
+// ─────────────────────────────────────────────────────────────────────────────
+export const ask = spacetimedb.procedure(
+  { customer_id: t.string(), question: t.string() },
+  t.string(),
+  (ctx, { customer_id: cid, question }) => {
+    const q = question.trim().slice(0, 300);
+    if (!q) return 'Please type a question.';
+    let prep: { schedule: ReturnType<typeof scheduleFor>['schedule']; outflow: number; asOf: string };
+    try {
+      prep = ctx.withTx(tx => {
+        const { schedule, snap, asOf } = scheduleFor(tx, cid);
+        return { schedule, outflow: snap.monthly_outflow_cents, asOf };
+      });
+    } catch {
+      return `No data for ${cid} yet.`;
+    }
+    const { key, model } = groqEnv(ctx);
+    const record = (row: { interpretation: string; supported: boolean; verdict: string; answer: string; source: string; rejected: string }) =>
+      ctx.withTx(tx =>
+        tx.db.qa.insert({
+          qa_id: 0n, customer_id: cid, question: q, interpretation: row.interpretation, supported: row.supported,
+          verdict: row.verdict, answer: row.answer, source: row.source, rejected_reason: row.rejected, created_at: tx.timestamp,
+        })
+      );
+    if (!key) {
+      const msg = 'Questions need the AI connection (GROQ_API_KEY). Use the what-if controls instead.';
+      record({ interpretation: '', supported: false, verdict: '', answer: msg, source: 'template', rejected: 'no GROQ_API_KEY set' });
+      return msg;
+    }
+
+    // 1) translate the question into a bounded scenario
+    const parsed = groqChat(ctx, key, model, [
+      { role: 'system', content: `${PARSE_PROMPT} Today is ${prep.asOf}.` },
+      { role: 'user', content: q },
+    ], true);
+    const p = parseScenario(parsed.text);
+    if (parsed.error || !p.supported) {
+      const msg = 'I can answer "what if" questions about your income, spending, a one-time expense, paying down debt with cash, or losing your job. Try asking it that way.';
+      record({ interpretation: p.summary, supported: false, verdict: '', answer: msg, source: 'template', rejected: parsed.error });
+      return msg;
+    }
+
+    // 2) run it against the baseline on the same random draws, 3) facts for the answer
+    const ev = evaluateQuestion(prep.schedule, prep.outflow, p, seedFromString(cid), DEFAULT_ASSUMPTIONS);
+    const r = explainWithAudit(ctx, ev.facts, `${ANSWER_ASK} The question was: "${q}"`, ev.fallback);
+
+    // 4) store: the what-if forecast, the third chart line, and the Q&A
+    ctx.withTx(tx => {
+      writeForecast(tx, cid, ev.whatIf, DEFAULT_ASSUMPTIONS);
+      writeWhatifLine(tx, cid, ev.habit, ev.interpretation.slice(0, 80));
+    });
+    record({ interpretation: ev.interpretation, supported: true, verdict: ev.verdict, answer: r.text, source: r.source, rejected: r.rejected });
+    return r.text;
+  }
+);

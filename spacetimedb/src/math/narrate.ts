@@ -84,6 +84,11 @@ export const FACT_TERMS: Record<string, string[]> = {
   top_risk: ['driver', 'risk', 'biggest', 'main', 'worst', 'bad', 'drive', 'uncertain'],
   top_lever: ['lever', 'help', 'most', 'biggest', 'cut', 'lower', 'change', 'more cash', 'boost'],
   danger: ['checking', 'dip', 'below', 'danger', 'low', 'chance', 'day'],
+  ask_scenario: ['scenario', 'expense', 'trip', 'income', 'spending', 'debt', 'paycheck', 'cost', 'purchase', 'buy', 'spend', 'days'],
+  ask_verdict: ['verdict', 'comfortable', 'tight', 'risky'],
+  ask_cash: ['cash'],
+  ask_risk: ['chance', 'risk', 'below', 'drop', 'odds'],
+  ask_low: ['lowest', 'low', 'dip', 'bottom', 'point'],
   goal: ['goal', 'chance', 'reach', 'save', 'month', 'target', 'by', 'raise', 'cash'],
 };
 

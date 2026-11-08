@@ -407,6 +407,38 @@ export const backtestOverall = table(
   }
 );
 
+// ---------- what-if as a third line on the 360° chart (net cash, habit band) ----------
+export const timelineWhatif = table(
+  { name: 'timeline_whatif', public: true },
+  {
+    whatif_id: t.string().primaryKey(), // customer_id|day_offset
+    customer_id: t.string().index('btree'),
+    day_offset: t.i32(), // 0 .. 180
+    date: t.string(),
+    low_cents: t.f64(),
+    mid_cents: t.f64(),
+    high_cents: t.f64(),
+    label: t.string(),
+  }
+);
+
+// ---------- free-form questions answered by the engine ----------
+export const qa = table(
+  { name: 'qa', public: true },
+  {
+    qa_id: t.u64().primaryKey().autoInc(),
+    customer_id: t.string().index('btree'),
+    question: t.string(),
+    interpretation: t.string(), // how the question was turned into a scenario
+    supported: t.bool(),
+    verdict: t.string(), // comfortable | tight | risky | ''
+    answer: t.string(),
+    source: t.string(), // groq | template
+    rejected_reason: t.string(),
+    created_at: t.timestamp(),
+  }
+);
+
 // ---------- danger days: predicted low-cash days in checking (PNC Low Cash Mode, but ahead of time) ----------
 export const dangerDay = table(
   { name: 'danger_day', public: true },
@@ -501,6 +533,8 @@ const spacetimedb = schema({
   goal,
   goalResult,
   dangerDay,
+  timelineWhatif,
+  qa,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:

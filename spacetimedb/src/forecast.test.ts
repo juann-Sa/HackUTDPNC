@@ -7,6 +7,8 @@ import { buildSchedule, type LedgerRow, type AccountRow } from './math/schedule'
 import { DEFAULT_ASSUMPTIONS, makeTapes, runForecast } from './math/forecast';
 import { analyze, RISK_CAP } from './math/coach';
 import { Draws, Tape, invNorm, seedFromString } from './math/rng';
+import { evaluateQuestion, parseScenario, verdict } from './math/ask';
+import { auditReply } from './math/narrate';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
 function csv(name: string): Record<string, string>[] {
@@ -130,5 +132,34 @@ describe('forecast engine', () => {
         if (rec) expect(rec.pLowAfter).toBeLessThanOrEqual(RISK_CAP);
       }
     }
+  }, 60_000);
+});
+
+describe('free-form questions', () => {
+  it('validates and clamps whatever the model returns', () => {
+    const p = parseScenario('Sure! {"supported": true, "income_mult": 5, "category_mults": {"dining": 0.5, "yachts": 0}, "one_off_cents": 200000, "one_off_in_days": 400, "summary": "trip"}');
+    expect(p).toMatchObject({ supported: true, incomeMult: 1.5, categoryMult: { dining: 0.5 }, oneOffCents: 200000, oneOffInDays: 179 });
+    expect(parseScenario('not json').supported).toBe(false);
+    expect(parseScenario('{"supported": "yes"}').supported).toBe(false);
+  });
+  it('verdict comes from fixed rules', () => {
+    expect(verdict(0.01, 500_000, 300_000)).toBe('comfortable');
+    expect(verdict(0.08, 500_000, 300_000)).toBe('tight');
+    expect(verdict(0.01, 200_000, 300_000)).toBe('tight');
+    expect(verdict(0.3, 500_000, 300_000)).toBe('risky');
+  });
+  it('answers "can I afford a $2,000 trip in a month" for C006 with audited facts', () => {
+    const { ledger, accounts } = customer('C006');
+    const s = buildSchedule(ledger, accounts, '2026-10-31', 180);
+    const p = parseScenario('{"supported": true, "one_off_cents": 200000, "one_off_in_days": 30}');
+    const ev = evaluateQuestion(s, 503699, p, seedFromString('C006'), { ...DEFAULT_ASSUMPTIONS, pairs: 200 });
+    expect(ev.interpretation).toBe('a one-time expense of $2,000 in 30 days');
+    expect(['comfortable', 'tight', 'risky']).toContain(ev.verdict);
+    expect(ev.whatIf.endLiquid.p50).toBeLessThan(ev.whatIf.endLiquid.p95);
+    // the template answer itself passes the audit, and a plausible AI answer does too
+    expect(auditReply(ev.fallback, ev.facts).ok).toBe(true);
+    const cash = ev.facts.find(f => f.key === 'ask_cash')!.text.match(/\$[\d,]+/g)!;
+    expect(auditReply(`Yes, it looks ${ev.verdict}: your cash would likely be about ${cash[1]} in 180 days instead of ${cash[0]}.`, ev.facts).ok).toBe(true);
+    console.log(ev.fallback);
   }, 60_000);
 });
