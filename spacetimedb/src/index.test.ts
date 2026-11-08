@@ -8,6 +8,8 @@ import { ConnectionId } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth } from 'spacetimedb/server/test-utils';
 
 import spacetime, * as m from './index';
+
+const NO_PURCHASE = { purchase_kind: '', purchase_price_cents: 0, down_payment_cents: 0, loan_apr_pct: 7.5, loan_term_months: 60, purchase_in_days: 30 };
 import { type Fact, auditReply, unverifiedNumbers } from './math/narrate';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
@@ -249,7 +251,7 @@ describe('SpaceTime 360 forecast reducers', () => {
     test.withReducerTx(stranger, ctx =>
       m.run_what_if(ctx, {
         customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: 0,
-        one_off_day: 0, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        one_off_day: 0, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0, ...NO_PURCHASE,
       })
     );
     const base = test.db.forecastRun.run_id.find('C006|baseline')!;
@@ -260,7 +262,7 @@ describe('SpaceTime 360 forecast reducers', () => {
       m.run_what_if(ctx, {
         customer_id: 'C006', include_external: false, income_mult: 1,
         category_mults: [{ category: 'dining', mult: 0.5 }], one_off_cents: 0, one_off_day: 0,
-        move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0, ...NO_PURCHASE,
       })
     );
     const cut = test.db.forecastRun.run_id.find('C006|what_if')!;
@@ -548,7 +550,7 @@ describe('ask procedure and the what-if line', () => {
     const line = (oneOff: number) => {
       test.withReducerTx(stranger, ctx => m.run_what_if(ctx, {
         customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: oneOff,
-        one_off_day: 30, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+        one_off_day: 30, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0, ...NO_PURCHASE,
       }));
       return [...test.db.timelineWhatif.customer_id.filter('C006')].sort((a, b) => a.day_offset - b.day_offset);
     };
@@ -602,4 +604,29 @@ describe('data basis and gaps', () => {
     expect(text).toMatch(/Linked outside accounts count toward net worth but are left out of the forecast/);
     expect(text).not.toMatch(/no outside accounts are linked/);
   }, 60_000);
+});
+
+describe('Future page scenarios', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+  const base = { customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: 0, one_off_day: 30, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0 };
+  it('run_what_if with a car purchase saves the user scenario and its 181-day line; clear removes it', () => {
+    test.withReducerTx(stranger, ctx => m.run_what_if(ctx, { ...base, purchase_kind: 'car', purchase_price_cents: 3_000_000, down_payment_cents: 500_000, loan_apr_pct: 7.5, loan_term_months: 60, purchase_in_days: 30 }));
+    const row = test.db.futureScenario.scenario_id.find('C006|user')!;
+    expect(row.scenario_type).toBe('user');
+    const s = JSON.parse(row.scenario_json);
+    expect(s.purchase).toEqual({ kind: 'car', priceCents: 3_000_000, downCents: 500_000, aprPct: 7.5, termMonths: 60, inDays: 30 });
+    const f = JSON.parse(row.forecast_json) as { day_offset: number; mid_cents: number }[];
+    expect(f).toHaveLength(181);
+    expect(f[0].day_offset).toBe(0);
+    // the car costs money: day 180 is lower than with no purchase
+    test.withReducerTx(stranger, ctx => m.run_what_if(ctx, { ...base, ...NO_PURCHASE }));
+    const none = JSON.parse(test.db.futureScenario.scenario_id.find('C006|user')!.forecast_json) as { mid_cents: number }[];
+    expect(f[180].mid_cents).toBeLessThan(none[180].mid_cents - 500_000);
+    test.withReducerTx(stranger, ctx => m.clear_user_future_scenario(ctx, { customer_id: 'C006' }));
+    expect(test.db.futureScenario.scenario_id.find('C006|user') ?? undefined).toBeUndefined();
+  }, 60_000);
+  it('rejects a bad purchase type', () => {
+    expect(() => test.withReducerTx(stranger, ctx => m.run_what_if(ctx, { ...base, ...NO_PURCHASE, purchase_kind: 'yacht' }))).toThrow(/car, home or other/);
+  });
 });

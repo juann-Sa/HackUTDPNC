@@ -135,13 +135,9 @@ export const ANSWER_ASK =
   '(the facts are listed most relevant first: for a purchase or loan, the monthly payment and the emergency cushion), then one practical tip.';
 
 /** Run a parsed question against the baseline (same random draws) and build the facts for the answer. */
-export function evaluateQuestion(
-  s: Schedule, outflowCents: number, p: ParsedScenario, seed: number, a: Assumptions,
-  book?: { incomeCents: number; debtPaymentsCents: number },
-) {
-  const tapes = makeTapes(seed, a, s.months.length + 1);
-  const pu = p.purchase;
-  const newLoan: NewLoan | undefined = pu && {
+/** The financed-purchase scenario for a parsed purchase (shared by questions and the Future page's controls). */
+export function purchaseLoan(pu: NonNullable<ParsedScenario['purchase']>): NewLoan {
+  return {
     dayIndex: pu.inDays,
     downCents: pu.downCents,
     principalCents: pu.priceCents - pu.downCents,
@@ -149,6 +145,26 @@ export function evaluateQuestion(
     paymentCents: Math.round(amortizedPayment(pu.priceCents - pu.downCents, pu.aprPct, pu.termMonths)),
     label: pu.kind === 'other' ? 'purchase' : pu.kind,
   };
+}
+
+/** The scenario as the Future page stores and edits it (frontend `CoachScenario`). */
+export function scenarioJson(p: ParsedScenario, cardAprBumpPct = 0): string {
+  const pu = p.purchase;
+  return JSON.stringify({
+    incomeMult: p.incomeMult, categoryMult: p.categoryMult, oneOffCents: p.oneOffCents, oneOffInDays: p.oneOffInDays,
+    moveToDebtCents: p.moveToDebtCents, jobLossMonths: p.jobLossMonths, cardAprBumpPct,
+    ...(pu ? { purchase: { kind: pu.kind, priceCents: pu.priceCents, downCents: pu.downCents, aprPct: pu.aprPct, termMonths: pu.termMonths, inDays: pu.inDays } } : {}),
+    summary: p.summary,
+  });
+}
+
+export function evaluateQuestion(
+  s: Schedule, outflowCents: number, p: ParsedScenario, seed: number, a: Assumptions,
+  book?: { incomeCents: number; debtPaymentsCents: number },
+) {
+  const tapes = makeTapes(seed, a, s.months.length + 1);
+  const pu = p.purchase;
+  const newLoan: NewLoan | undefined = pu && purchaseLoan(pu);
   const sc: Scenario = {
     id: 'what_if', label: 'What if', includeExternal: false, incomeMult: p.incomeMult, categoryMult: p.categoryMult,
     oneOff: p.oneOffCents > 0 ? { dayIndex: p.oneOffInDays, cents: p.oneOffCents } : undefined,
