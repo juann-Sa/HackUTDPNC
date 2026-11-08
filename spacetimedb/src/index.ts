@@ -12,9 +12,10 @@ import { dayNumber, isoFromDayNumber } from './math/dates';
 import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR, LIQUID_TYPES } from './math/book';
 import { SHRINK_K, buildSchedule } from './math/schedule';
 import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
-import { RISK_CAP, analyze } from './math/coach';
+import { RISK_CAP, analyze, sourceLabel } from './math/coach';
 import { seedFromString } from './math/rng';
-import { type Fact, SYSTEM_PROMPT, pct, templateText, unverifiedNumbers, usd, userPrompt } from './math/narrate';
+import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
+import { backtestCustomer } from './math/backtest';
 
 export default spacetimedb;
 
@@ -554,6 +555,7 @@ export const run_forecast = spacetimedb.reducer(
       ctx.db.coachAction.insert({
         action_id: `${cid}|${x.kind}`, customer_id: cid, kind: x.kind, amount_cents: x.amountCents, fraction: x.fraction,
         annual_saving_cents: round(x.annualSavingCents), p_low_before: x.pLowBefore, p_low_after: x.pLowAfter, detail: x.detail,
+        driver: x.driver, es_before_cents: round(x.esBefore), es_after_cents: round(x.esAfter),
       });
     const existing = ctx.db.forecastAssumption.customer_id.find(cid);
     if (existing) ctx.db.forecastAssumption.customer_id.delete(cid);
@@ -665,9 +667,39 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
   if (job) add('stress_job_loss', `That chance if income stopped for 3 months: ${pct(job.p_low)}`);
   const bill = ctx.db.forecastRun.run_id.find(`${cid}|stress_bill`);
   if (bill) add('stress_bill', `That chance after a surprise $3,000 bill: ${pct(bill.p_low)}`);
+  // advanced risk metrics, in plain words
+  if (base) {
+    add('es_worst', `In the worst 5% of futures, your cash falls by an average of ${usd(base.es95_cents)} over 180 days`);
+    add('dip', `Deepest dip in cash you would likely see (only a 1-in-20 chance of worse): ${usd(base.mdd_p95_cents)}`);
+  }
+  const drivers = [...ctx.db.riskSource.customer_id.filter(cid)]
+    .filter(r => r.scenario === 'baseline' && r.source !== 'planned_cash_flow' && r.es_contribution_cents > 0)
+    .sort((x, y) => y.es_contribution_cents - x.es_contribution_cents);
+  const uncertainTotal = drivers.reduce((p, r) => p + r.es_contribution_cents, 0);
+  if (drivers.length && uncertainTotal > 0)
+    add('top_risk', `Biggest driver of a bad outcome: ${sourceLabel(drivers[0].source)} (${pct(drivers[0].es_contribution_cents / uncertainTotal, 0)} of the uncertain part of the worst case)`);
+  const lever = [...ctx.db.sensitivity.customer_id.filter(cid)]
+    .filter(r => r.lever.startsWith('spend:') && !['spend:housing', 'spend:utilities'].includes(r.lever) && r.delta_end_p50_cents > 0)
+    .sort((x, y) => y.delta_end_p50_cents - x.delta_end_p50_cents)[0];
+  if (lever) add('top_lever', `Spending change that helps your 180-day cash the most: ${lever.label} (about ${usd(lever.delta_end_p50_cents)} more cash)`);
+
+  const worst = (a: { es_before_cents: number; es_after_cents: number }) =>
+    a.es_before_cents > 0 && Math.round(a.es_after_cents) !== Math.round(a.es_before_cents)
+      ? `; average worst-case loss goes from ${usd(a.es_before_cents)} to ${usd(a.es_after_cents)}`
+      : '';
   for (const a of ctx.db.coachAction.customer_id.filter(cid)) {
     if (a.kind === 'move_cash_to_debt')
       add('action_move', `Coach suggestion: move ${usd(a.amount_cents)} of spare cash to your highest-interest debt, saving about ${usd(a.annual_saving_cents)} a year; chance of running low goes from ${pct(a.p_low_before)} to ${pct(a.p_low_after)}`);
+    else if (a.kind === 'trim_category')
+      add('action_trim_category', `Coach suggestion: trim ${sourceLabel(a.driver)} by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month), because it is your biggest swing factor${worst(a)}`);
+    else if (a.kind === 'protect_income')
+      add('action_protect_income', a.fraction > 0
+        ? `Coach suggestion: a drop in income is your biggest risk, so keep a cash cushion and trim extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month)${worst(a)}`
+        : `Coach note: a drop in income is your biggest risk, which is why the coach always leaves a cash cushion of a few months of bills`);
+    else if (a.kind === 'reserve_for_surprises')
+      add('action_reserve', `Coach suggestion: keep about ${usd(a.amount_cents)} set aside for surprise bills, your biggest risk${worst(a)}`);
+    else if (a.kind === 'close_monthly_gap')
+      add('action_gap', `Coach finding: ${a.detail.replace(/\.$/, '')}${worst(a)}`);
     else
       add('action_trim', `Coach suggestion: trim dining, shopping and other extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month, ${usd(a.annual_saving_cents)} a year)`);
   }
@@ -719,15 +751,12 @@ export const narrate = spacetimedb.procedure(
             break;
           }
           const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
-          const bad = unverifiedNumbers(out, facts);
+          const audit = auditReply(out, facts);
           if (!out) rejected = 'empty reply';
-          else if (bad.length) {
-            rejected = `unverified numbers (attempt ${attempt + 1}): ${bad.slice(0, 5).join(', ')}`;
+          else if (!audit.ok) {
+            rejected = `attempt ${attempt + 1}: ${audit.problems.slice(0, 5).join('; ')}`;
             messages.push({ role: 'assistant', content: out });
-            messages.push({
-              role: 'user',
-              content: `These numbers are not in the facts: ${bad.join(', ')}. Rewrite the answer using only numbers copied exactly from the facts.`,
-            });
+            messages.push({ role: 'user', content: audit.feedback });
             continue;
           } else {
             text = out;
@@ -752,3 +781,86 @@ export const narrate = spacetimedb.procedure(
     return text;
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backtest (spec §10): forecast a period we already know from data before it.
+// ─────────────────────────────────────────────────────────────────────────────
+const BACKTEST_MONTHS = 6;
+
+/** Last day of the month BACKTEST_MONTHS before the as-of month (2026-10-31 → 2026-04-30). */
+function defaultCutoff(asOf: string): string {
+  let y = Number(asOf.slice(0, 4));
+  let m = Number(asOf.slice(5, 7)) - BACKTEST_MONTHS + 1;
+  while (m <= 0) {
+    m += 12;
+    y -= 1;
+  }
+  return isoFromDayNumber(dayNumber(`${y}-${String(m).padStart(2, '0')}-01`) - 1);
+}
+
+export const run_backtest = spacetimedb.reducer(
+  { customer_id: t.string(), cutoff: t.string() },
+  (ctx, { customer_id: cid, cutoff }) => {
+    if (!ctx.db.customer.customer_id.find(cid)) throw new SenderError(`Unknown customer ${cid}`);
+    const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
+    if (!ledger.length) throw new SenderError(`No ledger for ${cid}`);
+    const first = ledger.reduce((m, x) => (x.posted_date < m ? x.posted_date : m), ledger[0].posted_date);
+    const asOf = ledger.reduce((m, x) => (x.posted_date > m ? x.posted_date : m), '');
+    const cut = cutoff || defaultCutoff(asOf);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cut) || dayNumber(cut) - dayNumber(first) < 180 || dayNumber(asOf) - dayNumber(cut) < 30)
+      throw new SenderError('Cutoff must be YYYY-MM-DD with at least 180 days of history before it and 30 days after it');
+    const accts = [...ctx.db.account.customer_id.filter(cid)].sort((a, b) => (a.account_id < b.account_id ? -1 : 1));
+    const a = DEFAULT_ASSUMPTIONS;
+    const r = backtestCustomer(ledger, accts, cut, asOf, a, seedFromString(cid));
+
+    for (const row of [...ctx.db.backtestDay.customer_id.filter(cid)]) ctx.db.backtestDay.backtest_day_id.delete(row.backtest_day_id);
+    for (const d of r.days)
+      ctx.db.backtestDay.insert({
+        backtest_day_id: `${cid}|${d.dayIndex}`,
+        customer_id: cid,
+        day_index: d.dayIndex,
+        date: d.date,
+        actual_cents: round(d.actual),
+        actual_raw_cents: round(d.actualRaw),
+        low_cents: round(d.p5),
+        mid_cents: round(d.p50),
+        high_cents: round(d.p95),
+        inside: d.inside,
+      });
+    if (ctx.db.backtestSummary.customer_id.find(cid)) ctx.db.backtestSummary.customer_id.delete(cid);
+    ctx.db.backtestSummary.insert({
+      customer_id: cid,
+      cutoff: r.cutoff,
+      end: r.end,
+      paths: 2 * a.pairs,
+      coverage90: r.coverage90,
+      coverage90_raw: r.coverage90Raw,
+      end_error_pct: r.endErrorPct,
+      end_half_width_pct: r.endHalfWidthPct,
+      pinball: r.pinball,
+    });
+  }
+);
+
+/** Roll every customer's backtest into one headline row (overall_id = 0). */
+export const summarize_backtests = spacetimedb.reducer(ctx => {
+  const rows = [...ctx.db.backtestSummary.iter()];
+  if (!rows.length) throw new SenderError('No backtests yet; call run_backtest first');
+  const mean = (f: (r: (typeof rows)[number]) => number) => rows.reduce((s, r) => s + f(r), 0) / rows.length;
+  const median = (f: (r: (typeof rows)[number]) => number) => {
+    const xs = rows.map(f).sort((x, y) => x - y);
+    return xs[Math.floor(xs.length / 2)];
+  };
+  if (ctx.db.backtestOverall.overall_id.find(0)) ctx.db.backtestOverall.overall_id.delete(0);
+  ctx.db.backtestOverall.insert({
+    overall_id: 0,
+    customers: rows.length,
+    cutoff: rows[0].cutoff,
+    end: rows[0].end,
+    coverage90_mean: mean(r => r.coverage90),
+    coverage90_raw_mean: mean(r => r.coverage90_raw),
+    end_error_pct_median: median(r => r.end_error_pct),
+    end_half_width_pct_median: median(r => r.end_half_width_pct),
+    share_customers_coverage_80: mean(r => (r.coverage90 >= 0.8 ? 1 : 0)),
+  });
+});

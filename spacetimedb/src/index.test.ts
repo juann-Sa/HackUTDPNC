@@ -8,7 +8,7 @@ import { ConnectionId } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth } from 'spacetimedb/server/test-utils';
 
 import spacetime, * as m from './index';
-import { type Fact, unverifiedNumbers } from './math/narrate';
+import { type Fact, auditReply, unverifiedNumbers } from './math/narrate';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
 const DATA = join(ROOT, 'data');
@@ -374,4 +374,103 @@ describe('linked outside accounts', () => {
       test.withReducerTx(stranger, ctx => m.upsert_plaid_accounts(ctx, { rows: [row] }))
     ).toThrow(/owner/);
   });
+});
+
+describe('AI narration: label binding and spelled-out amounts', () => {
+  // Facts as gatherFacts writes them for C006, and the real Groq reply from the first live test.
+  const facts: Fact[] = [
+    { key: 'net_worth', text: 'Net worth (excluding home value): -$143,553' },
+    { key: 'cash', text: 'Cash in checking and savings: $29,665' },
+    { key: 'runway', text: 'Months of essential bills cash would cover: 5.9' },
+    { key: 'dti', text: 'Share of income going to debt payments: 52%' },
+    { key: 'utilization', text: 'Credit card utilization: 66%' },
+    { key: 'income_6m', text: 'Paychecks over the last 6 months: $25,142' },
+    { key: 'spending_6m', text: 'Spending over the last 6 months: $17,302' },
+    { key: 'organic_6m', text: 'Change in net worth from your own earning and spending over the last 6 months: $339' },
+    { key: 'net_cash_today', text: 'Net cash today (cash minus high-interest debt): $13,557' },
+    { key: 'continue_180', text: 'Net cash in 180 days if you continue as you are: about $9,239 (likely between $8,697 and $9,768)' },
+    { key: 'coach_180', text: 'Net cash in 180 days if you follow the coach: about $10,870' },
+    { key: 'action_move', text: 'Coach suggestion: move $14,500 of spare cash to your highest-interest debt, saving about $1,999 a year; chance of running low goes from 0.5% to 1.5%' },
+  ];
+  const live =
+    "You’ve built up $29,665 in checking and savings, which covers about 5.9 months of essential bills, but after subtracting high‑interest debt your net cash sits at $13,557 and your overall net worth (excluding your home) is –$143,553. " +
+    'Over the past six months you earned $25,142, spent $17,302 and only nudged net worth up $339, while 52% of your income goes to debt and credit‑card use sits at 66%. ' +
+    'If you keep spending the same, your cash will likely fall to about $9,239 in 180 days, but following the coach’s plan could lift it to about $10,870. ' +
+    'The single most useful next step is to move $14,500 of spare cash to your highest‑interest debt, which should save about $1,999 a year.';
+
+  it('catches the real "cash" vs "net cash" slip from the live test', () => {
+    const a = auditReply(live, facts);
+    expect(a.ok).toBe(false);
+    expect(a.problems).toEqual(['$9,239 missing label "net cash"', '$10,870 missing label "net cash"']);
+    expect(a.feedback).toMatch(/\$9,239 must be described as "net cash"/);
+  });
+  it('accepts the same reply once the label is right', () => {
+    const fixed = live.replace('your cash will likely fall', 'your net cash will likely fall');
+    expect(auditReply(fixed, facts)).toMatchObject({ ok: true, problems: [] });
+  });
+  it('accepts a range under the same label and rejects spelled-out amounts', () => {
+    expect(auditReply('Your net cash will likely land around $9,239, somewhere between $8,697 and $9,768.', facts).ok).toBe(true);
+    expect(auditReply('Your net cash is about thirteen thousand dollars.', facts).problems).toContain('spelled-out amount');
+    expect(auditReply('Your net worth is $13,557.', facts).problems).toEqual(['$13,557 missing label "net cash"']);
+  });
+});
+
+describe('backtest reducers', () => {
+  const { test } = loadedHarness();
+  for (const cid of ['C006', 'C002', 'C055'])
+    test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: cid, cutoff: '' }));
+
+  it('forecasts May-Oct 2026 from April 30 and scores it day by day', () => {
+    const days = [...test.db.backtestDay.customer_id.filter('C006')].sort((a, b) => a.day_index - b.day_index);
+    expect(days.length).toBe(184);
+    expect(days[0].date).toBe('2026-05-01');
+    expect(days[days.length - 1].date).toBe('2026-10-31');
+    for (const d of days) expect(d.low_cents <= d.mid_cents && d.mid_cents <= d.high_cents).toBe(true);
+    const s = test.db.backtestSummary.customer_id.find('C006')!;
+    expect(s.cutoff).toBe('2026-04-30');
+    expect(s.coverage90).toBeCloseTo(days.filter(d => d.inside).length / days.length, 10);
+  });
+
+  it('summarizes across customers and validates input', () => {
+    test.withReducerTx(stranger, ctx => m.summarize_backtests(ctx, {}));
+    const o = test.db.backtestOverall.overall_id.find(0)!;
+    expect(o.customers).toBe(3);
+    expect(o.coverage90_mean).toBeGreaterThan(0.5);
+    expect(() => test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: 'C006', cutoff: '2024-12-01' }))).toThrow(/Cutoff/);
+    expect(() => test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: 'C999', cutoff: '' }))).toThrow(/Unknown customer/);
+  });
+});
+
+describe('coach driven by the risk breakdown, and advanced metrics in narration', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+  const actions = [...test.db.coachAction.customer_id.filter('C006')];
+
+  it('targets the biggest driver of the worst case and flags the monthly gap', () => {
+    const kinds = actions.map(a => a.kind).sort();
+    const drivers = [...test.db.riskSource.customer_id.filter('C006')]
+      .filter(r => r.scenario === 'baseline' && r.source !== 'planned_cash_flow')
+      .sort((x, y) => y.es_contribution_cents - x.es_contribution_cents);
+    const expected: Record<string, string> = { income: 'protect_income', unexpected_bills: 'reserve_for_surprises' };
+    const top = drivers[0].source;
+    expect(kinds).toContain(expected[top] ?? 'trim_category');
+    expect(kinds).toContain('close_monthly_gap');
+    const driverAction = actions.find(a => a.driver === top)!;
+    expect(driverAction.es_before_cents).toBeGreaterThan(0);
+    // the coach move is unchanged: still the carry table's fixable leak
+    const carry = test.db.carrySummary.customer_id.find('C006')!;
+    const move = actions.find(a => a.kind === 'move_cash_to_debt')!;
+    expect(carry.idle_cash_cents - move.amount_cents).toBeLessThan(10_000);
+    writeFileSync('/tmp/st360_actions.txt', actions.map(a => `${a.kind} [${a.driver}] ${a.amount_cents} ES ${a.es_before_cents}->${a.es_after_cents} | ${a.detail}`).join('\n'));
+  });
+
+  it('the risk explanation now covers worst case, top driver, deepest dip and best lever', () => {
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'risk' });
+    expect(text).toMatch(/worst 5% of futures/);
+    expect(text).toMatch(/Biggest driver of a bad outcome/);
+    expect(text).toMatch(/Deepest dip/);
+    expect(text).toMatch(/helps your 180-day cash the most/);
+    const coachText = m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'coach' });
+    writeFileSync('/tmp/st360_risk_text.txt', text + '\n\n' + coachText);
+  }, 60_000);
 });

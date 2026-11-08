@@ -48,6 +48,8 @@ export interface Schedule {
   spend: Record<Category, { base: number[]; cardShare: number; cashDay: number; cardDay: number }>;
   sigmaShared: number;
   sigmaIdio: number;
+  /** Standard error of the household spending-level estimate (parameter uncertainty), log scale. */
+  sigmaLevel: number;
   phi: number;
   card: { accountId: string; balance: number; aprPct: number; payDay: number; paydown: number; feesPerMonth: number } | null;
   loans: { accountId: string; type: string; balance: number; aprPct: number; payment: number; day: number; feePerMonth: number }[];
@@ -269,6 +271,10 @@ export function buildSchedule(
     phi = va > 0 ? Math.min(0.8, Math.max(0, cov / va)) : 0;
   }
 
+  // Parameter uncertainty: the level is a mean of LEVEL_MONTHS noisy months, so its standard error is
+  // σ/√n. It persists across the whole horizon, unlike month-to-month noise, so it is drawn once per path.
+  const sigmaLevel = Math.sqrt(sigmaShared ** 2 + sigmaIdio ** 2 / CATEGORIES.length) / Math.sqrt(LEVEL_MONTHS);
+
   const savings = acct('savings')[0];
   for (const x of external) {
     if (['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(x.account_type))
@@ -287,6 +293,7 @@ export function buildSchedule(
     spend,
     sigmaShared,
     sigmaIdio,
+    sigmaLevel,
     phi,
     card,
     loans,

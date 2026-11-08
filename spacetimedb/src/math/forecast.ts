@@ -67,9 +67,10 @@ export const SOURCES = ['income', ...CATEGORIES.map(c => `spend:${c}`), 'unexpec
 /** Tape layout per antithetic pair (fixed, so CRN holds across scenarios). */
 const PER_MONTH_FLIP = 1 + CATEGORIES.length + 3; // shared t, idio t ×K, income z, regime u, market z
 const PER_DAY_FLIP = 2; // jump u, jump size z
+const PER_PATH_FLIP = 1; // spending-level estimation error (drawn once, first)
 
 export function makeTapes(customerSeed: number, a: Assumptions, months: number): Tape[] {
-  const nFlip = months * PER_MONTH_FLIP + (a.horizonDays + 1) * PER_DAY_FLIP;
+  const nFlip = PER_PATH_FLIP + months * PER_MONTH_FLIP + (a.horizonDays + 1) * PER_DAY_FLIP;
   const nKeep = months * (1 + CATEGORIES.length) * a.nu;
   return Array.from({ length: a.pairs }, (_, i) => new Tape(seedOf(customerSeed, i), nFlip, nKeep));
 }
@@ -168,6 +169,8 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
   liquid[0] = x;
   netCash[0] = x - highCostDebt();
 
+  // parameter uncertainty: how wrong our spending-level estimate is on this path (same for all months)
+  const levelMult = draws ? Math.exp(s.sigmaLevel * draws.normal()) : 1;
   let employed = true;
   const e = new Float64Array(K); // AR spending log-shocks
   const monthSpend = new Float64Array(K);
@@ -190,7 +193,7 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
         const tIdio = draws ? draws.studentT(a.nu) : 0;
         e[c] = s.phi * e[c] + s.sigmaShared * tShared + s.sigmaIdio * tIdio;
         const base = (s.spend[CATEGORIES[c]].base[mi] ?? 0) * catMult[c];
-        monthSpend[c] = base * Math.exp(draws ? e[c] : 0);
+        monthSpend[c] = base * (draws ? levelMult * Math.exp(e[c]) : 1);
         monthSpendDet[c] = base;
       }
       const zInc = draws ? draws.normal() : 0;
@@ -303,6 +306,8 @@ export interface ForecastResult {
   pLowSe: number;
   var95: number;
   es95: number;
+  /** Average ending cash across the worst 5% of futures (same tail as ES95). */
+  tailEndLiquid: number;
   mddP50: number;
   mddP95: number;
   endLiquid: { p5: number; p50: number; p95: number };
@@ -347,6 +352,7 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
   const q05 = quantile(sortedChange, 0.05);
   const tail = change.map((v, i) => [v, i] as const).filter(([v]) => v <= q05);
   const es95 = -tail.reduce((s2, [v]) => s2 + v, 0) / tail.length;
+  const tailEndLiquid = tail.reduce((s2, [, i]) => s2 + paths[i].liquid[H], 0) / tail.length;
   const mdd = Float64Array.from(
     paths.map(p => {
       let peak = -Infinity;
@@ -390,6 +396,7 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
     pLowSe,
     var95: -q05,
     es95,
+    tailEndLiquid,
     mddP50: quantile(mdd, 0.5),
     mddP95: quantile(mdd, 0.95),
     endLiquid: { p5: quantile(endL, 0.05), p50: quantile(endL, 0.5), p95: quantile(endL, 0.95) },

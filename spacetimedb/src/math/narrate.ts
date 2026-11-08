@@ -48,7 +48,95 @@ function isRounding(cand: string, fact: string): boolean {
   return false;
 }
 
-/** Returns the numbers in `text` that are neither in the facts nor an honest rounding of a fact. */
+/**
+ * Words that must appear near a fact's number (left of it in the same sentence, or right of it up to
+ * the next number). Keeps each number tied to what it measures: "net cash" is not "cash".
+ */
+export const FACT_TERMS: Record<string, string[]> = {
+  net_worth: ['net worth'],
+  cash: ['cash', 'checking', 'savings'],
+  runway: ['month', 'bills', 'cover'],
+  dti: ['debt', 'income'],
+  utilization: ['credit', 'card', 'utiliz'],
+  carry: ['interest', 'earn', 'paid', 'pay'],
+  fixable_leak: ['interest', 'save', 'saving'],
+  income_6m: ['paycheck', 'earn', 'income', 'made', 'brought in', 'pay'],
+  spending_6m: ['spen'],
+  debt_interest_6m: ['interest'],
+  external_6m: ['outside', 'other bank', 'other account', 'moved', 'transfer'],
+  organic_6m: ['net worth'],
+  net_cash_today: ['net cash'],
+  continue_180: ['net cash'],
+  coach_180: ['net cash'],
+  coach_gain: ['coach', 'difference', 'better', 'more', 'ahead'],
+  band_note: ['margin', 'plus or minus', '±', 'range', 'between', 'give or take', 'ups and downs', 'band'],
+  p_low: ['chance', 'risk', 'odds', 'probab', 'likel', 'below', 'under', 'low'],
+  stress_job_loss: ['income', 'job', 'paycheck', 'stop', 'lose', 'lost'],
+  stress_bill: ['bill', 'surprise', 'expense'],
+  action_move: ['move', 'debt', 'save', 'saving', 'chance', 'risk', 'low'],
+  action_trim: ['trim', 'cut', 'dining', 'shopping', 'extras', 'month', 'year', 'save'],
+  action_trim_category: ['trim', 'cut', 'spending', 'month', 'swing', 'worst', 'loss'],
+  action_protect_income: ['income', 'cushion', 'trim', 'extras', 'month', 'worst', 'loss'],
+  action_reserve: ['set aside', 'reserve', 'surprise', 'bill', 'worst', 'loss'],
+  action_gap: ['outflow', 'income', 'gap', 'trim', 'extras', 'month', 'covers', 'cover'],
+  es_worst: ['worst', 'bad', 'tough', 'fall', 'drop', 'lose', 'loss', 'shortfall'],
+  dip: ['dip', 'drop', 'fall', 'low point', 'swing', 'down', 'worse'],
+  top_risk: ['driver', 'risk', 'biggest', 'main', 'worst', 'bad', 'drive', 'uncertain'],
+  top_lever: ['lever', 'help', 'most', 'biggest', 'cut', 'lower', 'change', 'more cash', 'boost'],
+};
+
+const SPELLED = /\b(hundred|thousand|million|billion)s?\b/i;
+
+/** Number tokens in a fact, normalized. */
+const factNumbers = (f: Fact) => (f.text.match(NUM_RE) ?? []).map(norm);
+
+export interface Audit {
+  ok: boolean;
+  problems: string[]; // short, for logs
+  feedback: string; // instruction sent back to the model on retry
+}
+
+/** Check a reply: every number must come from a fact (or honestly round one) and keep that fact's label. */
+export function auditReply(text: string, facts: Fact[]): Audit {
+  const unverified: string[] = [];
+  const mislabeled: { tok: string; label: string }[] = [];
+  const spelled = SPELLED.test(text);
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  for (const sentence of sentences) {
+    const hits = [...sentence.matchAll(NUM_RE)];
+    hits.forEach((m, i) => {
+      const tok = m[0];
+      const n = norm(tok);
+      const plain = !tok.includes('$') && !tok.includes('%');
+      if (plain && FREE_NUMBERS.has(n)) return;
+      const candidates = facts.filter(f => factNumbers(f).some(x => x === n || x === n.replace(/%$/, '') || isRounding(n, x)));
+      if (!candidates.length) {
+        unverified.push(tok);
+        return;
+      }
+      const left = sentence.slice(0, m.index).toLowerCase();
+      const end = i + 1 < hits.length ? hits[i + 1].index! : sentence.length;
+      const right = sentence.slice(m.index! + tok.length, end).toLowerCase();
+      const labeled = candidates.some(f => (FACT_TERMS[f.key] ?? []).length === 0 ||
+        (FACT_TERMS[f.key] ?? []).some(term => left.includes(term) || right.includes(term)));
+      if (!labeled) mislabeled.push({ tok, label: (FACT_TERMS[candidates[0].key] ?? [''])[0] });
+    });
+  }
+  const problems = [
+    ...unverified.map(x => `unverified ${x}`),
+    ...mislabeled.map(x => `${x.tok} missing label "${x.label}"`),
+    ...(spelled ? ['spelled-out amount'] : []),
+  ];
+  const feedback = [
+    unverified.length ? `These numbers are not in the facts: ${unverified.join(', ')}.` : '',
+    ...mislabeled.map(x => `${x.tok} must be described as "${x.label}", exactly as in the facts.`),
+    spelled ? 'Write every amount with digits, never words like "thousand".' : '',
+    'Rewrite the answer using only numbers copied from the facts, each with its own label.',
+  ].filter(Boolean).join(' ');
+  return { ok: problems.length === 0, problems, feedback };
+}
+
+/** Numbers in `text` that are neither in the facts nor an honest rounding of one (label not checked). */
 export function unverifiedNumbers(text: string, facts: Fact[]): string[] {
   const ok = allowedNumbers(facts);
   const bad: string[] = [];
@@ -76,8 +164,8 @@ export function userPrompt(topic: string, facts: Fact[]): string {
     overview: 'Give a short 360° overview: where they have been, where they are, and where they are headed, and the single most useful next step.',
     past: 'Explain what happened to their money over the past months and why.',
     future: 'Explain the two paths for the next 180 days: continuing as they are versus following the coach, and how confident the forecast is.',
-    coach: 'Explain the coach\'s recommended actions, what each one saves, and what it does to their risk of running low on cash.',
-    risk: 'Explain how resilient they are to surprises, using the stress tests.',
+    coach: 'Explain the coach\'s recommended actions, what each one saves, and what it does to their risk of running low on cash and to their worst-case outcome.',
+    risk: 'Explain how resilient they are: their worst-case outcome, what drives it most, the deepest dip they might see, the stress tests, and the single spending change that helps most.',
   };
   return `${ask[topic] ?? ask.overview}\n\nFacts:\n${facts.map(f => `- ${f.text}`).join('\n')}`;
 }
@@ -87,11 +175,11 @@ export function templateText(topic: string, facts: Fact[]): string {
   const pick = (keys: string[]) =>
     keys.flatMap(k => facts.filter(f => f.key === k)).map(f => f.text.replace(/:\s*/, ': '));
   const order: Record<string, string[]> = {
-    overview: ['net_cash_today', 'organic_6m', 'external_6m', 'continue_180', 'coach_180', 'action_move', 'action_trim'],
+    overview: ['net_cash_today', 'organic_6m', 'external_6m', 'continue_180', 'coach_180', 'top_risk', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim'],
     past: ['income_6m', 'spending_6m', 'debt_interest_6m', 'external_6m', 'organic_6m'],
     future: ['continue_180', 'coach_180', 'coach_gain', 'band_note'],
-    coach: ['action_move', 'action_trim', 'fixable_leak'],
-    risk: ['p_low', 'stress_job_loss', 'stress_bill', 'runway'],
+    coach: ['action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
+    risk: ['p_low', 'es_worst', 'top_risk', 'dip', 'stress_job_loss', 'stress_bill', 'top_lever', 'runway'],
   };
   const lines = pick(order[topic] ?? order.overview);
   return lines.length ? `${lines.join('. ')}.` : 'Not enough data yet to explain this view.';
