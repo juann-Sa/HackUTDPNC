@@ -636,6 +636,14 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
     add('snowball', `Paying the smallest balance first (snowball) instead: debt other than the mortgage paid off by ${mon(dp.snowball_consumer_free_month)}, with ${vs}`);
     if (stuck.length) add('debt_stuck', `Not shrinking at today's payments: ${stuck.map(d => d.account_type.replace('_', ' ')).join(', ')}`);
   }
+  // What the numbers rest on, and what they leave out (stated, not hidden).
+  const historyMonths = [...ctx.db.pnlMonth.customer_id.filter(cid)].length;
+  if (historyMonths > 0)
+    add('data_basis', `Forecast built from ${historyMonths} months of account history; it shows a likely range, not a promise`);
+  const linked = [...ctx.db.externalAccount.customer_id.filter(cid)].length;
+  const fc = ctx.db.forecastRun.run_id.find(`${cid}|baseline`);
+  if (linked === 0) add('data_gaps', 'Not included: money at other banks, because no outside accounts are linked');
+  else if (fc && !fc.include_external) add('data_gaps', 'Linked outside accounts count toward net worth but are left out of the forecast');
   return f;
 }
 

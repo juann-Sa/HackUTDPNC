@@ -132,3 +132,7 @@
 .coach-history summary { cursor: pointer; padding: 6px 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
 @media (max-width: 640px) { .coach-form { flex-direction: column; } .coach-form button { padding: 12px; } }
+
+/* disclaimer and data notes */
+.coach-disclaimer { margin: 8px 0 0; padding-top: 8px; border-top: 1px solid #f1f1f1; font-size: 11px; line-height: 1.5; color: #8a8a8a; }
+.coach-data-note { margin: 12px 25px 0; font-size: 11px; color: #8a8a8a; }

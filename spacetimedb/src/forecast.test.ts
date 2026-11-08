@@ -244,6 +244,8 @@ describe('question router', () => {
   });
   it('the prompt lists every routable topic', () => {
     for (const t of ROUTE_TOPICS) expect(PARSE_PROMPT).toContain(`"${t}"`);
+  });
+});
 
 describe('snowball vs avalanche', () => {
   // small low-rate loan vs big high-rate card: snowball clears the small one first but pays more interest

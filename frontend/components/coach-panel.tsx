@@ -10,6 +10,7 @@ const EXAMPLES = [
   "What if I lose my job for 3 months?",
   "What if I put $5,000 of savings toward my card?",
 ];
+export const DISCLAIMER = "Educational tool using synthetic data — not financial advice.";
 const VERDICT: Record<string, string> = { comfortable: "Comfortable", tight: "Tight", risky: "Risky" };
 
 interface Answer { question: string; answer: string; verdict: string; interpretation: string; supported: boolean; source: string }
@@ -35,6 +36,12 @@ export default function CoachPanel() {
   }
   const submit = (event: FormEvent) => { event.preventDefault(); void ask(question); };
 
+  const dataNote = !data
+    ? null
+    : data.external_account.length === 0
+      ? "Only PNC accounts are included; money held at other banks isn’t counted."
+      : "Linked outside accounts count toward your balances; forecasts use PNC accounts only.";
+
   const history = ((data?.qa ?? []) as QaRow[])
     .filter(r => r.supported && r.question !== current?.question)
     .sort((a, b) => Number(b.qa_id) - Number(a.qa_id))
@@ -56,8 +63,10 @@ export default function CoachPanel() {
         {current.interpretation && <p className="coach-read">Understood as: {current.interpretation}</p>}
         <p className="coach-text">{current.answer}</p>
         <small>{current.source === "groq" ? "AI-written; every number was checked against the forecast." : "Standard answer (the AI wording didn’t pass the number check or isn’t available)."}</small>
+        <p className="coach-disclaimer">{dataNote && <>{dataNote} </>}Forecasts are ranges, not promises. {DISCLAIMER}</p>
       </article>}
     </div>
+    {!current && dataNote && <p className="coach-data-note">{dataNote}</p>}
     {history.length > 0 && <div className="coach-history"><h3>Earlier questions</h3>{history.map(h => <details key={String(h.qa_id)}><summary>{h.verdict && <span className="coach-verdict" data-verdict={h.verdict}>{VERDICT[h.verdict] ?? h.verdict}</span>}{h.question}</summary><p className="coach-text">{h.answer}</p></details>)}</div>}
   </section>;
 }
