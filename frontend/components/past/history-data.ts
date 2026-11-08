@@ -1,0 +1,8 @@
+﻿import type { LedgerRow } from "@/lib/live-data";
+export const money = (cents: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(cents / 100);
+export const monthLabel = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleDateString("en-US", { month: "long", year: "numeric" });
+export const categoryLabel = (category: string) => category.replace(/_/g, " ").replace(/^./, letter => letter.toUpperCase());
+export function categoryTotals(rows: LedgerRow[]) { const totals = new Map<string, number>(); for (const row of rows) if (row.flow_class === "expense") totals.set(row.category, (totals.get(row.category) ?? 0) + row.amount_cents); return [...totals].map(([category, cents]) => ({ category, cents })).sort((a,b) => b.cents-a.cents); }
+export function monthRows(rows: LedgerRow[], month: string) { return rows.filter(row => row.posted_date.startsWith(month)); }
+export function flowTotals(rows: LedgerRow[]) { return rows.reduce((total,row) => ({ income: total.income + (row.flow_class === "income" ? row.amount_cents : 0), spending: total.spending + (row.flow_class === "expense" ? row.amount_cents : 0) }), { income: 0, spending: 0 }); }
+export function compareMonths(rows: LedgerRow[], first: string, second: string) { const a = new Map(categoryTotals(monthRows(rows, first)).map(item => [item.category,item.cents])); const b = new Map(categoryTotals(monthRows(rows, second)).map(item => [item.category,item.cents])); return [...new Set([...a.keys(),...b.keys()])].map(category => ({ category, before: a.get(category) ?? 0, after: b.get(category) ?? 0, difference: (b.get(category) ?? 0)-(a.get(category) ?? 0) })).sort((a,b) => Math.abs(b.difference)-Math.abs(a.difference)); }

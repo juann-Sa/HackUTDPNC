@@ -1,0 +1,12 @@
+﻿import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { financialPosition, positionShares } from './financial-position.ts';
+const account=(id,type,cents)=>({account_id:id,account_type:type,balance_cents:cents});
+const data=(accounts=[],external=[])=>({account:accounts,external_account:external});
+test('compares assets with debt, never absolute net worth',()=>{const result=financialPosition(data([account('a','checking',11480000),account('b','mortgage',25835300)]));assert.equal(result.assets.cents,11480000);assert.equal(result.debt.cents,25835300);assert.equal(positionShares(result).assets,114800/373153);});
+test('deduplicates connected account ids and ignores credit scores',()=>{const result=financialPosition(data([account('a','savings',10000),account('score','credit_score',742)],[account('a','savings',10000),account('b','investment',20000)]));assert.equal(result.assets.cents,30000);assert.equal(result.debt.cents,0);});
+test('classifies every supported financial asset and debt',()=>{const result=financialPosition(data(['checking','savings','cd','ira','investment'].map((type,i)=>account(`a${i}`,type,10000)),['credit_card','personal_loan','auto_loan','mortgage'].map((type,i)=>account(`d${i}`,type,20000))));assert.equal(result.assets.cents,50000);assert.equal(result.debt.cents,80000);});
+test('missing balances are unavailable rather than invented zeros',()=>{const result=financialPosition(data([account('a','checking',undefined),account('b','credit_card',100)]));assert.equal(result.assets.cents,null);assert.equal(result.debt.cents,100);assert.equal(positionShares(result),null);});
+test('handles empty and unavailable data',()=>{assert.equal(financialPosition(null).assets.cents,null);assert.equal(financialPosition(data()).debt.cents,null);});
+test('known zero balances have no invalid chart percentages',()=>{const result=financialPosition(data([account('a','savings',0)]));assert.equal(result.assets.cents,0);assert.equal(positionShares(result),null);});
+test('one-sided balances form a full ring',()=>{assert.deepEqual(positionShares(financialPosition(data([account('a','checking',500)]))),{assets:1,debt:0});assert.deepEqual(positionShares(financialPosition(data([account('b','personal_loan',500)]))),{assets:0,debt:1});});

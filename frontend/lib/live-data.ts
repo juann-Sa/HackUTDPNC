@@ -123,7 +123,7 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
   const cds = of("cd");
   const cdInterest12 = d.ledger_entry.filter(e => e.account_type === "cd" && e.transaction_type === "interest_accrual" && e.posted_date > `${Number(year) - 1}${asOf.slice(4)}`).reduce((t, e) => t + e.amount_cents, 0);
 
-  const nw12 = d.pnl_month.slice().sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-12).reduce((t, r) => t + r.delta_net_worth_cents, 0);
+  const investments = [...new Map([...d.account, ...d.external_account].filter(account => ["investment", "investments", "brokerage"].includes(account.account_type)).map(account => [account.account_id, account])).values()];
 
   const data: Record<AccountType, AccountData> = {
     savings: {
@@ -170,15 +170,10 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
       progress: opened > 0 ? { label: "Principal repaid (past 2 years)", value: Math.round(100 * repaid), detail: `${pct(repaid, 0)} of loan balances repaid since the history began` } : undefined,
     },
     investment: {
-      name: "Net worth",
-      primary: { label: "Net worth", value: money(snap?.net_worth_cents ?? 0) },
-      change: nw12 ? `${nw12 >= 0 ? "+" : "−"}${money(Math.abs(nw12))} over the past 12 months` : undefined,
-      metrics: [
-        { label: "Total assets", value: money(snap?.total_assets_cents ?? 0) },
-        { label: "Total debt", value: money(snap?.total_debt_cents ?? 0) },
-      ],
-    },
-    cds: {
+      name: "Investment",
+      primary: { label: "Investment balance", value: investments.length ? money(investments.reduce((total, account) => total + account.balance_cents, 0)) : "Not available" },
+      metrics: [],
+    },    cds: {
       name: "CDs",
       primary: { label: "CD balance", value: money(sum(cds)) },
       metrics: [
@@ -190,7 +185,7 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
   const available: OptionalAccountType[] = [];
   if (ira.length) available.push("ira");
   if (loans.length) available.push("loan");
-  available.push("investment");
+  if (investments.length) available.push("investment");
   if (cds.length) available.push("cds");
   return { data, available };
 }

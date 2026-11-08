@@ -28,7 +28,7 @@ export default function TotalBalanceCard() {
   } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
  }
  return <div className="balance-card bank-balance-card">
-  <div className="balance-label"><span>{bank ? `${bank.name} Balance` : "Total Balance"}</span><span className="balance-badge">{bank ? bank.name.toUpperCase() : "ALL ACCOUNTS"}</span></div>
+  <div className="balance-label"><span>{bank ? `${bank.name} Balance` : "Total Balance"}</span></div>
   <div className="balance-value" aria-live="polite" aria-atomic="true">{data ? <><span key={selected} className="bank-balance-number">{whole(balance)}</span><span>{cents(balance)}</span></> : <span className="bank-balance-number">…</span>}</div>
   <div className="bank-selection" role="group" aria-label="Select bank balance">
    <button aria-pressed={selected === "all"} onClick={() => setSelected("all")}>All Accounts</button>

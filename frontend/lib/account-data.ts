@@ -10,6 +10,6 @@ export const accountData: Record<AccountType, AccountData> = {
  credit: { name: "Credit", primary: { label: "Loading", value: "…" }, metrics: [] },
  ira: { name: "IRA", primary: { label: "Loading", value: "…" }, metrics: [] },
  loan: { name: "Loans", primary: { label: "Loading", value: "…" }, metrics: [] },
- investment: { name: "Net worth", primary: { label: "Loading", value: "…" }, metrics: [] },
+ investment: { name: "Investment", primary: { label: "Loading", value: "…" }, metrics: [] },
  cds: { name: "CDs", primary: { label: "Loading", value: "…" }, metrics: [] },
 };
