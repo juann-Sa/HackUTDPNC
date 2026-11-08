@@ -1,6 +1,9 @@
-import { accountData, type AccountType } from "@/lib/account-data";
+"use client";
+import { useLiveData } from "./live-data-provider";
+import { accountData as placeholder, type AccountType } from "@/lib/account-data";
 import AccountProgress from "./AccountProgress";
 export default function AccountContent({ account }: { account: AccountType }) {
+ const accountData = useLiveData().accounts ?? placeholder;
  const data = accountData[account];
  const change = data.change?.trim();
  const changeDirection = change?.startsWith("+") ? "positive" : change && /^[−-]/.test(change) ? "negative" : "neutral";

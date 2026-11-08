@@ -1,7 +1,10 @@
-﻿import { useRef, type KeyboardEvent } from "react";
-import { accountData, isOptionalAccount, type AccountType, type OptionalAccountType } from "@/lib/account-data";
+"use client";
+import { useLiveData } from "./live-data-provider";
+import { useRef, type KeyboardEvent } from "react";
+import { accountData as placeholder, isOptionalAccount, type AccountType, type OptionalAccountType } from "@/lib/account-data";
 interface AccountTabsProps { accounts: AccountType[]; selected: AccountType; onSelect: (account: AccountType) => void; onRemove: (account: OptionalAccountType) => void }
 export default function AccountTabs({ accounts, selected, onSelect, onRemove }: AccountTabsProps) {
+ const accountData = useLiveData().accounts ?? placeholder;
  const refs = useRef<Partial<Record<AccountType, HTMLButtonElement | null>>>({});
  function navigate(event: KeyboardEvent<HTMLButtonElement>, index: number) {
   let next: number;

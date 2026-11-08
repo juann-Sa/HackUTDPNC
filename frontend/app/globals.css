@@ -93,3 +93,12 @@
 .account-change[data-direction="negative"]{color:#e5484d}
 
 .bank-balance-card .balance-value>span:last-child{font-size:.8em}
+
+/* live-data additions */
+.live-error { margin: 0 0 16px; padding: 12px 14px; border: 1px solid #f3c2c2; background: #fff5f5; color: #9b1c1c; border-radius: 10px; font-size: 13px; }
+.as-of { margin: 4px 0 0; color: #737373; font-size: 13px; }
+.customer-picker { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 8px 0; font-size: 13px; }
+.customer-picker select { font: inherit; padding: 4px 6px; border: 1px solid #e0e0e0; border-radius: 6px; background: #fff; }
+.bill-risk { color: #b45309; }
+.payments-note { margin: 8px 25px 10px; color: #737373; font-size: 12px; }
+.payments-panel .bill-date .bill-risk { white-space: normal; }
