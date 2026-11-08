@@ -1,0 +1,44 @@
+.pnc-dash .car-main { max-width: 1440px; margin: auto; padding: 24px 48px 40px; }
+.pnc-dash .car-heading { margin-bottom: 24px; }
+.pnc-dash .car-heading h1 { font-size: 33px; font-weight: 500; letter-spacing: -1.3px; }
+.pnc-dash .car-heading p { margin: 6px 0 0; color: #737373; font-size: 14px; }
+.pnc-dash .car-empty p { margin: 0; padding: 22px 25px; color: #525252; }
+.pnc-dash .car-vehicle { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px; padding: 22px 25px; }
+.pnc-dash .car-eyebrow { display: block; font-size: 10px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: #737373; }
+.pnc-dash .car-vehicle h2 { margin: 6px 0 2px; font-size: 26px; font-weight: 500; letter-spacing: -.8px; }
+.pnc-dash .car-vehicle p { margin: 0; color: #737373; font-size: 13px; }
+.pnc-dash .car-vehicle dl { display: flex; flex-wrap: wrap; gap: 28px; margin: 0; }
+.pnc-dash .car-vehicle dt { font-size: 11px; color: #737373; }
+.pnc-dash .car-vehicle dd { margin: 4px 0 0; font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.pnc-dash .car-vehicle dd small { font-size: 10px; font-weight: 500; color: #b45309; background: #fff4e0; border-radius: 999px; padding: 2px 6px; margin-left: 4px; }
+.pnc-dash .car-options { margin-top: 24px; padding-bottom: 20px; }
+.pnc-dash .car-options .panel-heading { padding-bottom: 12px; }
+.pnc-dash .car-sub { margin: 6px 0 0; color: #737373; font-size: 13px; }
+.pnc-dash .car-status { margin: 4px 25px; font-size: 13px; color: #737373; }
+.pnc-dash .car-table-wrap { overflow-x: auto; margin: 0 25px; }
+.pnc-dash .car-table { width: 100%; min-width: 820px; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+.pnc-dash .car-table th, .pnc-dash .car-table td { padding: 11px 12px; text-align: left; border-bottom: 1px solid #f1f1f1; vertical-align: top; }
+.pnc-dash .car-table thead th { vertical-align: bottom; border-bottom: 1px solid #e8e8e8; }
+.pnc-dash .car-table thead th strong { display: block; font-size: 14px; font-weight: 600; }
+.pnc-dash .car-table tbody th { font-weight: 500; color: #404040; width: 210px; }
+.pnc-dash .car-table td { font-variant-numeric: tabular-nums; color: #171717; }
+.pnc-dash .car-table .is-best { background: #fff7f0; }
+.pnc-dash .car-table thead .is-best { border-top: 3px solid #f58025; border-radius: 8px 8px 0 0; }
+.pnc-dash .car-detail { display: block; margin-top: 4px; font-size: 11px; font-weight: 400; color: #737373; line-height: 1.4; }
+.pnc-dash .car-hint { display: block; margin-top: 2px; font-size: 10px; font-weight: 400; color: #8a8a8a; }
+.pnc-dash .car-badge { display: inline-block; margin-bottom: 6px; padding: 2px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase; }
+.pnc-dash .car-badge.best { background: #f58025; color: #fff; }
+.pnc-dash .car-badge.upgrade { background: #eef2ff; color: #4338ca; }
+.pnc-dash .car-note { margin: 12px 25px 0; font-size: 11px; color: #8a8a8a; line-height: 1.5; }
+.pnc-dash .car-grid { margin-top: 24px; display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 24px; }
+.pnc-dash .car-explain, .pnc-dash .car-next { padding-bottom: 22px; }
+.pnc-dash .car-body { padding: 14px 25px 0; }
+.pnc-dash .car-body .car-note { margin: 12px 0 0; }
+.pnc-dash .car-body .coach-text { margin: 0; font-size: 15px; line-height: 1.6; color: #262626; }
+.pnc-dash .car-next-title { margin: 6px 0 0; font-size: 18px; font-weight: 500; }
+.pnc-dash .car-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.pnc-dash .car-button { font: inherit; font-size: 14px; font-weight: 500; padding: 10px 16px; border: 0; border-radius: 10px; background: #f58025; color: #fff; }
+.pnc-dash .car-button.secondary { background: #fff; color: #171717; border: 1px solid #e0e0e0; }
+.pnc-dash .car-button:disabled { opacity: .55; }
+@media (max-width: 1050px) { .pnc-dash .car-main { padding-left: 28px; padding-right: 28px; } }
+@media (max-width: 760px) { .pnc-dash .car-main { padding: 20px; } .pnc-dash .car-grid { grid-template-columns: 1fr; } .pnc-dash .car-table-wrap, .pnc-dash .car-note { margin-left: 20px; margin-right: 20px; } }

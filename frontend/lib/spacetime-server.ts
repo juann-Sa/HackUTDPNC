@@ -61,6 +61,7 @@ export async function select(query: string): Promise<Row[]> {
 export const REDUCERS: Record<string, string[]> = {
   add_external_account: ["customer_id", "institution", "account_type", "nickname", "balance_cents", "apr_pct", "annual_yield_pct", "monthly_payment_cents"],
   remove_external_account: ["account_id"],
+  run_car_options: ["customer_id"],
   run_forecast: ["customer_id", "include_external"],
   run_what_if: ["customer_id", "include_external", "income_mult", "category_mults", "one_off_cents", "one_off_day", "move_to_debt_cents", "job_loss_months", "card_apr_bump_pct", "purchase_kind", "purchase_price_cents", "down_payment_cents", "loan_apr_pct", "loan_term_months", "purchase_in_days"],
   clear_user_future_scenario: ["customer_id"],
@@ -82,7 +83,7 @@ export async function callReducer(name: string, args: Record<string, Json>): Pro
 }
 
 /** Call a procedure (same HTTP endpoint as reducers); returns its JSON-decoded result when there is one. */
-export async function callProcedure(name: "ask" | "narrate", args: unknown[]): Promise<unknown> {
+export async function callProcedure(name: "ask" | "narrate" | "narrate_car", args: unknown[]): Promise<unknown> {
   const res = await fetch(`${HOST}/v1/database/${DB}/call/${name}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${await getToken()}`, "Content-Type": "application/json" },

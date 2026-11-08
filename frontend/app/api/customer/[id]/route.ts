@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 const TABLES = [
   "customer", "account", "external_account", "book_snapshot", "ledger_entry", "statement",
   "pnl_month", "debt_payoff", "debt_plan", "danger_day", "goal", "goal_result", "qa",
-  "timeline_360", "timeline_whatif", "future_scenario", "coach_action", "forecast_run",
+  "timeline_360", "timeline_whatif", "future_scenario", "coach_action", "forecast_run", "vehicle", "car_option",
 ] as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

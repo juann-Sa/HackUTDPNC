@@ -37,6 +37,8 @@ export interface CoachActionRow { kind: string; amount_cents: number; fraction: 
 export interface ForecastRunRow { scenario: string; label: string; p_low: number; threshold_cents: number; end_liquid_p5_cents: number; end_liquid_p50_cents: number; end_liquid_p95_cents: number; horizon_days: number }
 export interface GoalRow { goal_id: string; name: string; kind: string; target_cents: number; target_date: string }
 export interface GoalResultRow { goal_id: string; days_to_goal: number; p_success: number; low_cents: number; mid_cents: number; high_cents: number; needed_80_cents: number | null; needed_95_cents: number | null; p_with_needed_80: number | null; needed_share_of_extras: number | null }
+export interface VehicleRow { vehicle_id: string; account_id: string; make: string; model: string; model_year: number; mileage: number; list_price_cents: number; trade_in_estimate_cents: number; new_model_year: number; new_price_cents: number; refi_apr_pct: number; new_car_apr_pct: number; new_car_term_months: number }
+export interface CarOptionRow { option_id: string; rank: number; kind: string; label: string; detail: string; monthly_payment_cents: number; payment_change_cents: number; upfront_cash_cents: number; interest_cents: number; interest_saved_cents: number; payoff_month: string | null; p_low: number; end_cash_p50_cents: number; cushion_months: number; dti_after: number; verdict: string; is_best: boolean }
 export interface CustomerRow { customer_id: string; credit_limit_cents: number }
 
 
@@ -53,6 +55,8 @@ export interface CustomerData {
   danger_day: DangerRow[];
   qa?: QaRow[];
   timeline_360?: TimelineRow[];
+  vehicle?: VehicleRow[];
+  car_option?: CarOptionRow[];
   timeline_whatif?: WhatifRow[];
   future_scenario?: PersistedFutureScenario[];
   coach_action?: CoachActionRow[];
