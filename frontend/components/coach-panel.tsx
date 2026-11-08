@@ -5,10 +5,11 @@ import { useLiveData } from "./live-data-provider";
 import type { QaRow } from "@/lib/live-data";
 
 const EXAMPLES = [
-  "Can I afford a $2,000 trip next month?",
-  "What if I cut dining out in half?",
+  "If I buy a $30,000 car with $5,000 down, will I still have enough for emergencies?",
+  "How am I doing financially?",
   "What if I lose my job for 3 months?",
-  "What if I put $5,000 of savings toward my card?",
+  "When will I be debt-free?",
+  "What if I cut dining out in half?",
 ];
 export const DISCLAIMER = "Educational tool using synthetic data — not financial advice.";
 const VERDICT: Record<string, string> = { comfortable: "Comfortable", tight: "Tight", risky: "Risky" };
@@ -48,7 +49,7 @@ export default function CoachPanel() {
     .slice(0, 4);
 
   return <section className="panel coach-panel" aria-labelledby="coach-title">
-    <div className="panel-heading"><div><h2 id="coach-title"><Sparkles size={18} aria-hidden /> Ask the coach</h2><p className="coach-sub">Ask a what-if about {customerId}&apos;s money. It runs the forecast, then explains the numbers it got.</p></div></div>
+    <div className="panel-heading"><div><h2 id="coach-title"><Sparkles size={18} aria-hidden /> Ask the coach</h2><p className="coach-sub">Ask about {customerId}&apos;s money: where it stands, or a what-if (a purchase or loan, a pay change, a job loss). It runs the numbers first, then explains them.</p></div></div>
     <form className="coach-form" onSubmit={submit}>
       <label htmlFor="coach-question" className="sr-only">Your question</label>
       <input id="coach-question" value={question} maxLength={300} placeholder="e.g. Can I afford a $1,500 laptop in December?" onChange={event => setQuestion(event.target.value)} disabled={busy} />
