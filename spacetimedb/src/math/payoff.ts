@@ -46,11 +46,23 @@ export function debtsFromSchedule(s: Schedule): DebtIn[] {
   return out;
 }
 
-export function simulatePayoff(input: DebtIn[], moveCents: number, rollover: boolean): PayoffPlan {
+export type PayoffOrder = 'avalanche' | 'snowball';
+
+/**
+ * avalanche: cash move to high-cost (APR >= 10) debts, highest APR first; freed payments roll to the
+ *            highest-APR open debt.
+ * snowball:  cash move to non-mortgage debts, smallest balance first; freed payments roll to the
+ *            smallest open non-mortgage balance (the mortgage last).
+ */
+export function simulatePayoff(input: DebtIn[], moveCents: number, rollover: boolean, order: PayoffOrder = 'avalanche'): PayoffPlan {
   const debts = input.map(d => ({ ...d, bal: d.balance, months: undefined as number | undefined, interest: 0, extra: 0 }));
   // one-time move: highest-APR high-cost debts first
   let move = moveCents;
-  for (const d of [...debts].filter(x => x.aprPct >= HIGH_COST_APR).sort((a, b) => b.aprPct - a.aprPct)) {
+  const moveTargets =
+    order === 'snowball'
+      ? [...debts].filter(x => x.type !== 'mortgage').sort((a, b) => a.bal - b.bal)
+      : [...debts].filter(x => x.aprPct >= HIGH_COST_APR).sort((a, b) => b.aprPct - a.aprPct);
+  for (const d of moveTargets) {
     const amt = Math.min(move, d.bal);
     d.bal -= amt;
     move -= amt;
@@ -79,7 +91,11 @@ export function simulatePayoff(input: DebtIn[], moveCents: number, rollover: boo
     // roll freed payments into the highest-APR open debt for next month
     for (const d of debts) d.extra = 0;
     if (rollover && freed > 0) {
-      const target = debts.filter(d => d.months === undefined).sort((a, b) => b.aprPct - a.aprPct)[0];
+      const open = debts.filter(d => d.months === undefined);
+      const target =
+        order === 'snowball'
+          ? open.sort((a, b) => Number(a.type === 'mortgage') - Number(b.type === 'mortgage') || a.bal - b.bal)[0]
+          : open.sort((a, b) => b.aprPct - a.aprPct)[0];
       if (target) target.extra = freed;
     }
     if (debts.every(d => d.months !== undefined)) break;

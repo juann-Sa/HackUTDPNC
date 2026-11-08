@@ -17,7 +17,7 @@ import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 import { backtestCustomer } from './math/backtest';
 import { GOAL_KINDS, MAX_GOAL_DAYS, evaluateGoal } from './math/goals';
-import { ANSWER_ASK, PARSE_PROMPT, evaluateQuestion, parseScenario } from './math/ask';
+import { ANSWER_ASK, ANSWER_TOPIC, PARSE_PROMPT, TOPIC_LABELS, evaluateQuestion, parseScenario } from './math/ask';
 import { addMonths, debtsFromSchedule, simulatePayoff } from './math/payoff';
 
 export default spacetimedb;
@@ -536,6 +536,7 @@ export const run_forecast = spacetimedb.reducer(
     const debts = debtsFromSchedule(schedule);
     const now = simulatePayoff(debts, 0, false);
     const plan = simulatePayoff(debts, move, true);
+    const snow = simulatePayoff(debts, move, true, 'snowball');
     const asOfIso = schedule.asOf;
     const monthOf = (n: number | undefined) => (n === undefined ? undefined : addMonths(asOfIso, n));
     for (const r of [...ctx.db.debtPayoff.customer_id.filter(cid)]) ctx.db.debtPayoff.account_id.delete(r.account_id);
@@ -546,6 +547,7 @@ export const run_forecast = spacetimedb.reducer(
         monthly_payment_cents: round(d.monthlyPayment), payoff_months: d.months, payoff_month: monthOf(d.months),
         interest_cents: round(d.interest), coach_payoff_months: c.months, coach_payoff_month: monthOf(c.months),
         coach_interest_cents: round(c.interest),
+        snowball_payoff_months: snow.debts[i].months, snowball_payoff_month: monthOf(snow.debts[i].months),
       });
     });
     if (ctx.db.debtPlan.customer_id.find(cid)) ctx.db.debtPlan.customer_id.delete(cid);
@@ -559,6 +561,9 @@ export const run_forecast = spacetimedb.reducer(
       coach_total_interest_cents: round(plan.totalInterest),
       interest_saved_cents: round(now.totalInterest - plan.totalInterest),
       coach_move_cents: move,
+      snowball_consumer_free_month: monthOf(snow.consumerMonths),
+      snowball_total_interest_cents: round(snow.totalInterest),
+      snowball_extra_interest_cents: round(snow.totalInterest - plan.totalInterest),
     });
 
     // Danger days from the baseline (life events included).
@@ -796,8 +801,19 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
     const stuck = [...ctx.db.debtPayoff.customer_id.filter(cid)].filter(d => d.payoff_months === undefined && d.account_type !== 'mortgage');
     if (dp.interest_saved_cents > 0)
       add('interest_saved', `Interest saved over the life of your debts with the coach's plan: ${usd(dp.interest_saved_cents)}${stuck.length ? ' (a balance that never shrinks is counted for up to 40 years)' : ''}`);
+    const extra = dp.snowball_extra_interest_cents;
+    const vs = Math.abs(extra) < 100 ? "about the same interest as the coach's plan" : extra > 0 ? `${usd(extra)} more interest than the coach's plan` : `${usd(-extra)} less interest than the coach's plan`;
+    add('snowball', `Paying the smallest balance first (snowball) instead: debt other than the mortgage paid off by ${mon(dp.snowball_consumer_free_month)}, with ${vs}`);
     if (stuck.length) add('debt_stuck', `Not shrinking at today's payments: ${stuck.map(d => d.account_type.replace('_', ' ')).join(', ')}`);
   }
+  // What the numbers rest on, and what they leave out (stated, not hidden).
+  const historyMonths = [...ctx.db.pnlMonth.customer_id.filter(cid)].length;
+  if (historyMonths > 0)
+    add('data_basis', `Forecast built from ${historyMonths} months of account history; it shows a likely range, not a promise`);
+  const linked = [...ctx.db.externalAccount.customer_id.filter(cid)].length;
+  const fc = ctx.db.forecastRun.run_id.find(`${cid}|baseline`);
+  if (linked === 0) add('data_gaps', 'Not included: money at other banks, because no outside accounts are linked');
+  else if (fc && !fc.include_external) add('data_gaps', 'Linked outside accounts count toward net worth but are left out of the forecast');
   return f;
 }
 
@@ -1047,11 +1063,11 @@ export const ask = spacetimedb.procedure(
   (ctx, { customer_id: cid, question }) => {
     const q = question.trim().slice(0, 300);
     if (!q) return 'Please type a question.';
-    let prep: { schedule: ReturnType<typeof scheduleFor>['schedule']; outflow: number; asOf: string };
+    let prep: { schedule: ReturnType<typeof scheduleFor>['schedule']; outflow: number; asOf: string; income: number; debtPayments: number };
     try {
       prep = ctx.withTx(tx => {
         const { schedule, snap, asOf } = scheduleFor(tx, cid);
-        return { schedule, outflow: snap.monthly_outflow_cents, asOf };
+        return { schedule, outflow: snap.monthly_outflow_cents, asOf, income: snap.monthly_income_cents, debtPayments: snap.monthly_debt_payments_cents };
       });
     } catch {
       return `No data for ${cid} yet.`;
@@ -1076,14 +1092,26 @@ export const ask = spacetimedb.procedure(
       { role: 'user', content: q },
     ], true);
     const p = parseScenario(parsed.text);
+    // 1b) router: a question about where they stand (not a what-if) goes to the matching summary's facts
+    if (!parsed.error && !p.supported && p.topic !== 'none') {
+      let facts: Fact[];
+      try {
+        facts = ctx.withTx(tx => gatherFacts(tx, cid));
+      } catch {
+        return `No forecast for ${cid} yet. Run run_forecast first.`;
+      }
+      const r = explainWithAudit(ctx, facts, ANSWER_TOPIC(q), templateText(p.topic, facts));
+      record({ interpretation: `A question about ${TOPIC_LABELS[p.topic]}`, supported: true, verdict: '', answer: r.text, source: r.source, rejected: r.rejected });
+      return r.text;
+    }
     if (parsed.error || !p.supported) {
-      const msg = 'I can answer "what if" questions about your income, spending, a one-time expense, paying down debt with cash, or losing your job. Try asking it that way.';
+      const msg = 'I can answer questions about your accounts, where your money is headed, debt payoff and risk, and "what if" questions about income, spending, a purchase or loan, paying down debt, or losing your job. That one is outside what I can check.';
       record({ interpretation: p.summary, supported: false, verdict: '', answer: msg, source: 'template', rejected: parsed.error });
       return msg;
     }
 
     // 2) run it against the baseline on the same random draws, 3) facts for the answer
-    const ev = evaluateQuestion(prep.schedule, prep.outflow, p, seedFromString(cid), DEFAULT_ASSUMPTIONS);
+    const ev = evaluateQuestion(prep.schedule, prep.outflow, p, seedFromString(cid), DEFAULT_ASSUMPTIONS, { incomeCents: prep.income, debtPaymentsCents: prep.debtPayments });
     const r = explainWithAudit(ctx, ev.facts, `${ANSWER_ASK} The question was: "${q}"`, ev.fallback);
 
     // 4) store: the what-if forecast, the third chart line, and the Q&A

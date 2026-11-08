@@ -79,4 +79,17 @@ export async function callReducer(name: string, args: Record<string, Json>): Pro
   if (!res.ok) throw new Error((await res.text()).slice(0, 300) || `Reducer ${name} failed (${res.status})`);
 }
 
+/** Call a procedure (same HTTP endpoint as reducers); returns its JSON-decoded result when there is one. */
+export async function callProcedure(name: "ask" | "narrate", args: unknown[]): Promise<unknown> {
+  const res = await fetch(`${HOST}/v1/database/${DB}/call/${name}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${await getToken()}`, "Content-Type": "application/json" },
+    body: JSON.stringify(args),
+    cache: "no-store",
+  });
+  const text = await res.text();
+  if (!res.ok) throw new Error(text.slice(0, 300) || `Procedure ${name} failed (${res.status})`);
+  try { return JSON.parse(text); } catch { return text; }
+}
+
 export const CUSTOMER_ID = /^C\d{3}$/;

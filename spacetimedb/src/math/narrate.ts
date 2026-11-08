@@ -19,6 +19,8 @@ const FREE_NUMBERS = new Set(['1', '2', '3', '4', '5', '6', '7', '8', '9', '10',
 
 const NUM_RE = /-?\$?\d[\d,]*(?:\.\d+)?%?/g;
 const norm = (tok: string) => tok.replace(/[$,]/g, '').replace(/^-/, '');
+/** "0.3 %" (with a normal, no-break or thin space, as models often write) counts as "0.3%". */
+const joinPercent = (text: string) => text.replace(/(\d)[ \u00a0\u202f\u2009]+%/g, '$1%');
 
 export function allowedNumbers(facts: Fact[]): Set<string> {
   const s = new Set(FREE_NUMBERS);
@@ -53,6 +55,8 @@ function isRounding(cand: string, fact: string): boolean {
  * the next number). Keeps each number tied to what it measures: "net cash" is not "cash".
  */
 export const FACT_TERMS: Record<string, string[]> = {
+  data_basis: ['history', 'month', 'range', 'promise', 'forecast'],
+  data_gaps: ['other bank', 'outside', 'linked', 'not included', 'left out'],
   net_worth: ['net worth'],
   cash: ['cash', 'checking', 'savings'],
   runway: ['month', 'bills', 'cover'],
@@ -89,8 +93,13 @@ export const FACT_TERMS: Record<string, string[]> = {
   ask_cash: ['cash'],
   ask_risk: ['chance', 'risk', 'below', 'drop', 'odds'],
   ask_low: ['lowest', 'low', 'dip', 'bottom', 'point'],
+  ask_payment: ['payment', 'monthly', 'a month', 'interest', 'loan'],
+  ask_cushion: ['cushion', 'emergency', 'months', 'guideline', 'cover'],
+  ask_dti: ['income', 'debt', 'share', 'percent', 'guideline', 'lender'],
+  ask_assumed: ['assum', 'rate', 'interest', 'term', 'months'],
   debt_free: ['debt', 'paid off', 'pay off', 'free', 'clear', 'mortgage'],
   interest_saved: ['interest', 'save', 'saving'],
+  snowball: ['snowball', 'smallest', 'balance', 'interest', 'paid off', 'pay off'],
   debt_stuck: ['shrink', 'balance', 'card', 'loan', 'debt'],
   goal: ['goal', 'chance', 'reach', 'save', 'month', 'target', 'by', 'raise', 'cash'],
 };
@@ -108,6 +117,7 @@ export interface Audit {
 
 /** Check a reply: every number must come from a fact (or honestly round one) and keep that fact's label. */
 export function auditReply(text: string, facts: Fact[]): Audit {
+  text = joinPercent(text);
   const unverified: string[] = [];
   const mislabeled: { tok: string; label: string }[] = [];
   const spelled = SPELLED.test(text);
@@ -148,6 +158,7 @@ export function auditReply(text: string, facts: Fact[]): Audit {
 
 /** Numbers in `text` that are neither in the facts nor an honest rounding of one (label not checked). */
 export function unverifiedNumbers(text: string, facts: Fact[]): string[] {
+  text = joinPercent(text);
   const ok = allowedNumbers(facts);
   const bad: string[] = [];
   for (const m of text.match(NUM_RE) ?? []) {
@@ -173,7 +184,7 @@ export function userPrompt(topic: string, facts: Fact[]): string {
   const ask: Record<string, string> = {
     overview: 'Give a short 360° overview: where they have been, where they are, and where they are headed, and the single most useful next step.',
     past: 'Explain what happened to their money over the past months and why.',
-    future: 'Explain the two paths for the next 180 days: continuing as they are versus following the coach, and how confident the forecast is.',
+    future: 'Explain the two paths for the next 180 days: continuing as they are versus following the coach, and how confident the forecast is, including what it leaves out.',
     coach: 'Explain the coach\'s recommended actions, what each one saves, and what it does to their risk of running low on cash and to their worst-case outcome.',
     goals: 'For each goal, say how likely they are to reach it and what it would take if the chance is low.',
     risk: 'Explain how resilient they are: their worst-case outcome, what drives it most, the deepest dip they might see, the stress tests, and the single spending change that helps most.',
@@ -186,10 +197,10 @@ export function templateText(topic: string, facts: Fact[]): string {
   const pick = (keys: string[]) =>
     keys.flatMap(k => facts.filter(f => f.key === k)).map(f => f.text.replace(/:\s*/, ': '));
   const order: Record<string, string[]> = {
-    overview: ['net_cash_today', 'organic_6m', 'external_6m', 'continue_180', 'coach_180', 'top_risk', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim'],
+    overview: ['net_cash_today', 'organic_6m', 'external_6m', 'continue_180', 'coach_180', 'top_risk', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'data_basis', 'data_gaps'],
     past: ['income_6m', 'spending_6m', 'debt_interest_6m', 'external_6m', 'organic_6m'],
-    future: ['continue_180', 'coach_180', 'coach_gain', 'band_note', 'danger'],
-    coach: ['debt_free', 'interest_saved', 'debt_stuck', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
+    future: ['continue_180', 'coach_180', 'coach_gain', 'band_note', 'danger', 'data_basis', 'data_gaps'],
+    coach: ['debt_free', 'interest_saved', 'snowball', 'debt_stuck', 'action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
     goals: ['goal'],
     risk: ['p_low', 'danger', 'es_worst', 'top_risk', 'dip', 'stress_job_loss', 'stress_bill', 'top_lever', 'runway'],
   };

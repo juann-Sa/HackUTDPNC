@@ -7,6 +7,7 @@ const DEFAULT_CUSTOMER = "C006";
 const storageKey = "pnc-navigator-customer-v1";
 
 interface LiveData {
+  reload: () => void;
   customerId: string;
   setCustomerId: (id: string) => void;
   customers: string[];
@@ -63,10 +64,12 @@ export default function LiveDataProvider({ children }: { children: ReactNode }) 
     setVersion(v => v + 1);
   }, []);
 
+  const reload = useCallback(() => setVersion(value => value + 1), []);
+
   const tabs = useMemo(() => (data ? accountTabsFor(data) : null), [data]);
 
   const value: LiveData = {
-    customerId, setCustomerId, customers, data, loading, error,
+    customerId, setCustomerId, customers, data, loading, error, reload,
     accounts: tabs?.data ?? null, availableAccounts: tabs?.available ?? [], call,
   };
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

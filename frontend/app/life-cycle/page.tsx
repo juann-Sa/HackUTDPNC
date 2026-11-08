@@ -21,10 +21,12 @@ import {
 } from 'recharts'
 import { generateSpendingData, type SpendingPoint } from './mockData'
 import AppHeader from '@/components/AppHeader'
+import '../home/dashboard.css'
+import './life-cycle.css'
 
-/** Shared glassmorphism panel styling. */
+/** Match the Overview card surfaces. */
 const glass =
-  'rounded-3xl border border-white/60 bg-white/60 shadow-[0_24px_70px_-28px_rgba(245,130,31,0.45)] backdrop-blur-xl'
+  'health-panel'
 
 function formatUSD(n: number): string {
   return `$${Math.round(n).toLocaleString('en-US')}`
@@ -45,19 +47,19 @@ function SpendingTooltip({ active, payload }: SpendingTooltipProps) {
   const point = payload[0].payload
 
   return (
-    <div className="min-w-[190px] rounded-2xl border border-white/70 bg-white/85 px-4 py-3 shadow-xl backdrop-blur-xl">
+    <div className="min-w-[190px] rounded-xl border border-[#e8e8e8] bg-white px-4 py-3 shadow-sm">
       <div className="flex items-center justify-between gap-3">
-        <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+        <span className="text-xs font-semibold uppercase tracking-wider text-[#737373]">
           {whenLabel(point.day)}
         </span>
         {point.day > 0 && (
-          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600">
+          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-amber-600">
             Projected
           </span>
         )}
       </div>
-      <p className="mt-1.5 text-sm font-medium text-slate-500">Total Spending</p>
-      <p className="text-xl font-extrabold text-slate-800">{formatUSD(point.total)}</p>
+      <p className="mt-1.5 text-sm font-medium text-[#737373]">Total Spending</p>
+      <p className="text-xl font-medium text-[#171717]">{formatUSD(point.total)}</p>
     </div>
   )
 }
@@ -74,13 +76,13 @@ function StatCard({ label, value, hint, dot }: StatCardProps) {
   return (
     <div className={`${glass} p-4 sm:p-5`}>
       <div className="flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-[#737373]">
           {label}
         </p>
         {dot && <span className={`h-2.5 w-2.5 rounded-full ${dot}`} />}
       </div>
-      <p className="mt-2 text-2xl font-extrabold text-slate-800">{value}</p>
-      {hint && <p className="mt-1 text-xs font-medium text-slate-400">{hint}</p>}
+      <p className="mt-2 text-2xl font-medium text-[#171717]">{value}</p>
+      {hint && <p className="mt-1 text-xs font-medium text-[#737373]">{hint}</p>}
     </div>
   )
 }
@@ -96,6 +98,8 @@ const SpendingChart = memo(function SpendingChart({
   onActiveChange,
 }: SpendingChartProps) {
   const current = data.find((d) => d.day === 0)
+  const firstDay = data[0]?.day ?? -180
+  const lastDay = data[data.length - 1]?.day ?? 180
 
   return (
     <div className="h-[340px] w-full sm:h-[380px]">
@@ -130,8 +134,8 @@ const SpendingChart = memo(function SpendingChart({
           <XAxis
             dataKey="day"
             type="number"
-            domain={[-180, 180]}
-            ticks={[-180, -90, 0, 90, 180]}
+            domain={[firstDay, lastDay]}
+            ticks={[firstDay, Math.round(firstDay / 2), 0, Math.round(lastDay / 2), lastDay]}
             tickFormatter={(d: number) =>
               d === 0 ? 'Current' : d < 0 ? `${d} Days` : `+${d} Days`
             }
@@ -222,11 +226,11 @@ function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-slate-400">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-[#737373]">
               Financial Health Metric
             </h3>
             <span
-              className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold transition-colors ${
+              className={`rounded-full px-2.5 py-0.5 text-[11px] font-medium transition-colors ${
                 live ? 'bg-brand text-white' : 'bg-brand-tint text-brand-dark'
               }`}
             >
@@ -234,15 +238,15 @@ function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
             </span>
           </div>
           <p className="mt-1 flex items-baseline gap-2">
-            <span className="text-4xl font-extrabold tabular-nums text-slate-800">
+            <span className="text-4xl font-medium tabular-nums text-[#171717]">
               {value}%
             </span>
-            <span className={`text-sm font-bold ${statusText}`}>{status}</span>
+            <span className={`text-sm font-medium ${statusText}`}>{status}</span>
           </p>
         </div>
-        <p className="max-w-xs text-xs leading-relaxed text-slate-400">
+        <p className="max-w-xs text-xs leading-relaxed text-[#737373]">
           A blended score from your spending, income and cash-flow buffers.
-          <span className="font-semibold text-slate-500"> Hover the chart</span> to see
+          <span className="font-semibold text-[#737373]"> Hover the chart</span> to see
           it change over time.
         </p>
       </div>
@@ -250,7 +254,7 @@ function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
       <div className="relative mt-8">
         <div className="h-4 w-full overflow-hidden rounded-full bg-slate-900/5">
           <div
-            className="h-full rounded-full bg-gradient-to-r from-rose-500 via-amber-400 to-emerald-500 shadow-[0_4px_14px_rgba(245,130,31,0.45)] transition-[width] duration-300 ease-out"
+            className="h-full rounded-full bg-[#f58025] transition-[width] duration-300 ease-out"
             style={{ width: `${width}%` }}
           />
         </div>
@@ -268,13 +272,13 @@ function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
           className="pointer-events-none absolute -top-8 transition-[left] duration-300 ease-out"
           style={{ left: `${width}%`, transform: 'translateX(-50%)' }}
         >
-          <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-bold tabular-nums text-white shadow-lg">
+          <span className="rounded-lg bg-slate-900 px-2 py-1 text-xs font-medium tabular-nums text-white shadow-lg">
             {value}%
           </span>
         </div>
       </div>
 
-      <div className="mt-3 flex justify-between text-[11px] font-semibold text-slate-400">
+      <div className="mt-3 flex justify-between text-[11px] font-semibold text-[#737373]">
         <span>0</span>
         <span>25</span>
         <span>50</span>
@@ -288,6 +292,11 @@ function HealthMetricBar({ value, context, live }: HealthMetricBarProps) {
 /* ---- Page ---------------------------------------------------------------- */
 export default function LifeCycle() {
   const data = useMemo(() => generateSpendingData(), [])
+  const [range, setRange] = useState<"1M" | "3M" | "1Y" | "ALL">("1M")
+  const visibleData = useMemo(() => {
+    const halfWindow = { "1M": 15, "3M": 45, "1Y": 183, ALL: Infinity }[range]
+    return data.filter(point => Math.abs(point.day) <= halfWindow)
+  }, [data, range])
   const currentPoint = useMemo(
     () => data.find((d) => d.day === 0) ?? data[Math.floor(data.length / 2)],
     [data],
@@ -305,33 +314,17 @@ export default function LifeCycle() {
   const monthlyAvg = Math.round(currentTotal / 6)
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-[#fff8f1] text-slate-800">
-      {/* Ambient background blobs */}
-      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -right-28 -top-28 h-96 w-96 rounded-full bg-brand/25 blur-3xl" />
-        <div className="absolute left-[-120px] top-1/3 h-80 w-80 rounded-full bg-amber-300/30 blur-3xl" />
-        <div className="absolute bottom-[-80px] right-1/4 h-72 w-72 rounded-full bg-orange-200/50 blur-3xl" />
-      </div>
+    <div className="life-cycle-page">
+      <AppHeader current="health" appearance="overview" />
 
-      <AppHeader current="health" />
-
-      <main className="relative z-10 mx-auto max-w-6xl px-5 pb-16 pt-8">
+      <main className="life-cycle-main">
         {/* Page title + range selector */}
         <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-brand-dark">
-              Life Cycle
-            </p>
-            <h1 className="mt-1.5 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Your spending, past &amp; future
-            </h1>
-          </div>
-          <div className="flex items-center gap-1 rounded-full border border-white/60 bg-white/60 p-1 text-sm shadow-sm backdrop-blur-xl">
-            <span className="rounded-full bg-brand px-3 py-1 font-semibold text-white shadow-sm">
-              360 days
-            </span>
-            <span className="px-3 py-1 font-medium text-slate-400">90 days</span>
-            <span className="px-3 py-1 font-medium text-slate-400">30 days</span>
+          <h1>Life cycle</h1>
+          <div className="health-range" role="group" aria-label="Spending time range">
+            {(["1M", "3M", "1Y", "ALL"] as const).map(item => (
+              <button key={item} className={range === item ? 'active' : ''} aria-pressed={range === item} onClick={() => { setRange(item); setActivePoint(null) }}>{item}</button>
+            ))}
           </div>
         </div>
 
@@ -341,17 +334,17 @@ export default function LifeCycle() {
           <StatCard
             label="Monthly average"
             value={formatUSD(monthlyAvg)}
-            dot="bg-amber-400"
+            dot="bg-brand"
           />
           <StatCard
             label="Projected +180d"
             value={formatUSD(projectedTotal)}
-            dot="bg-sky-400"
+            dot="bg-brand"
           />
           <StatCard
             label="Health score"
             value={`${shown.health}%`}
-            dot="bg-emerald-500"
+            dot="bg-brand"
           />
         </div>
 
@@ -359,12 +352,12 @@ export default function LifeCycle() {
         <section className={`${glass} mt-6 p-5 sm:p-6`}>
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-bold text-slate-900">Total Spending over time</h2>
-              <p className="text-sm text-slate-500">
+              <h2 className="text-lg font-medium text-[#171717]">Total Spending over time</h2>
+              <p className="text-sm text-[#737373]">
                 Cumulative spend with a 180-day projection.
               </p>
             </div>
-            <div className="flex items-center gap-4 text-xs font-semibold text-slate-500">
+            <div className="flex items-center gap-4 text-xs font-semibold text-[#737373]">
               <span className="flex items-center gap-2">
                 <span className="h-1 w-6 rounded-full bg-brand" />
                 Actual
@@ -375,7 +368,7 @@ export default function LifeCycle() {
               </span>
             </div>
           </div>
-          <SpendingChart data={data} onActiveChange={handleActiveChange} />
+          <SpendingChart data={visibleData} onActiveChange={handleActiveChange} />
         </section>
 
         {/* Health metric — reacts to chart hover */}

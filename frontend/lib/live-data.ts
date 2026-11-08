@@ -15,7 +15,9 @@ export interface PlanRow { consumer_free_month: string | null; coach_consumer_fr
 export interface DangerRow { date: string; p_below: number; reasons: string }
 export interface CustomerRow { customer_id: string; credit_limit_cents: number }
 
+export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
 export interface CustomerData {
+  qa?: QaRow[];
   customer: CustomerRow[];
   account: AccountRow[];
   external_account: ExternalRow[];

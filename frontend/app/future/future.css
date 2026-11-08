@@ -1,0 +1,11 @@
+﻿.future-page{min-height:100vh;background:#fff;color:#171717;font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+.future-main{max-width:1440px;margin:0 auto;padding:24px 48px 40px}
+.future-main h1{margin:0;color:#171717;font-size:33px;font-weight:500;letter-spacing:-1.3px;line-height:1.3}
+.future-panel{min-width:0;border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 4px 16px rgba(23,23,23,.07),0 1px 3px rgba(23,23,23,.04)}
+.future-page .health-header .topbar{background:#fff}
+.future-page .health-header .topbar nav>a{color:#171717}
+.future-panel>div+div{border-left:1px solid #e8e8e8;padding-left:24px}
+@media(min-width:1500px){.future-main{padding-top:28px}}
+@media(max-width:1050px){.future-main{padding-left:28px;padding-right:28px}}
+@media(max-width:760px){.future-main{padding:20px}.future-main h1{font-size:27px}}
+@media(max-width:639px){.future-panel>div+div{border-left:0;border-top:1px solid #e8e8e8;padding:20px 0 0}}

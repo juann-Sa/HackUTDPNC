@@ -490,6 +490,8 @@ export const debtPayoff = table(
     coach_payoff_months: t.option(t.u32()),
     coach_payoff_month: t.option(t.string()),
     coach_interest_cents: t.f64(),
+    snowball_payoff_months: t.option(t.u32()).default(undefined), // smallest-balance-first plan
+    snowball_payoff_month: t.option(t.string()).default(undefined),
   }
 );
 
@@ -505,6 +507,9 @@ export const debtPlan = table(
     coach_total_interest_cents: t.f64(),
     interest_saved_cents: t.f64(),
     coach_move_cents: t.f64(),
+    snowball_consumer_free_month: t.option(t.string()).default(undefined), // same cash, smallest balance first
+    snowball_total_interest_cents: t.f64().default(0),
+    snowball_extra_interest_cents: t.f64().default(0), // snowball interest minus the coach (avalanche) plan's
   }
 );
 
