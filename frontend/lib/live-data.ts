@@ -12,7 +12,7 @@ export interface PnlRow { month: string; income_cents: number; spending_cents: n
 export interface SnapshotRow { as_of: string; net_worth_cents: number; liquid_cents: number; total_assets_cents: number; total_debt_cents: number; monthly_outflow_cents: number; runway_months: number | null; utilization: number | null }
 export interface PayoffRow { account_id: string; account_type: string; apr_pct: number; payoff_months: number | null; payoff_month: string | null; coach_payoff_months: number | null; coach_payoff_month: string | null; snowball_payoff_month?: string | null }
 export interface PlanRow { consumer_free_month: string | null; coach_consumer_free_month: string | null; interest_saved_cents: number; snowball_consumer_free_month?: string | null; snowball_extra_interest_cents?: number }
-export interface DangerRow { date: string; p_below: number; reasons: string }
+export interface DangerRow { date: string; p_below: number; reasons: string; threshold_cents?: number }
 export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
 export interface TimelineRow { day_offset: number; date: string; actual_net_cash_cents: number | null; actual_liquid_cents: number | null; continue_low_cents: number | null; continue_mid_cents: number | null; continue_high_cents: number | null; coach_low_cents: number | null; coach_mid_cents: number | null; coach_high_cents: number | null }
 export interface WhatifRow { day_offset: number; date: string; low_cents: number; mid_cents: number; high_cents: number; label: string }
@@ -20,7 +20,7 @@ export interface CoachActionRow { kind: string; amount_cents: number; fraction: 
 export interface ForecastRunRow { scenario: string; label: string; p_low: number; threshold_cents: number; end_liquid_p5_cents: number; end_liquid_p50_cents: number; end_liquid_p95_cents: number; horizon_days: number }
 export interface GoalRow { goal_id: string; name: string; kind: string; target_cents: number; target_date: string }
 export interface GoalResultRow { goal_id: string; days_to_goal: number; p_success: number; low_cents: number; mid_cents: number; high_cents: number; needed_80_cents: number | null; needed_95_cents: number | null; p_with_needed_80: number | null; needed_share_of_extras: number | null }
-export interface CustomerRow { customer_id: string; credit_limit_cents: number }
+export interface CustomerRow { customer_id: string; credit_limit_cents: number; monthly_income_cents?: number }
 
 export interface CustomerData {
   customer: CustomerRow[];

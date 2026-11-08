@@ -2,13 +2,14 @@
 
 import Link from 'next/link'
 
-export type AppSection = 'home' | 'coach' | 'health' | 'future'
+export type AppSection = 'home' | 'coach' | 'health' | 'future' | 'whatif'
 
 const TABS: { id: AppSection; href: string; label: string }[] = [
   { id: 'home', href: '/home', label: 'Home' },
   { id: 'coach', href: '/coach', label: 'Coach' },
   { id: 'health', href: '/life-cycle', label: 'Health' },
   { id: 'future', href: '/future', label: 'Future' },
+  { id: 'whatif', href: '/what-if', label: 'What-if' },
 ]
 
 interface MainNavProps {
