@@ -62,6 +62,8 @@ export const REDUCERS: Record<string, string[]> = {
   add_external_account: ["customer_id", "institution", "account_type", "nickname", "balance_cents", "apr_pct", "annual_yield_pct", "monthly_payment_cents"],
   remove_external_account: ["account_id"],
   run_forecast: ["customer_id", "include_external"],
+  run_what_if: ["customer_id", "include_external", "income_mult", "category_mults", "one_off_cents", "one_off_day", "move_to_debt_cents", "job_loss_months", "card_apr_bump_pct", "purchase_kind", "purchase_price_cents", "down_payment_cents", "loan_apr_pct", "loan_term_months", "purchase_in_days"],
+  clear_user_future_scenario: ["customer_id"],
   add_goal: ["customer_id", "name", "kind", "target_cents", "target_date"],
   remove_goal: ["goal_id"],
   evaluate_goals: ["customer_id"],

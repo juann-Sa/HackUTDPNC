@@ -16,11 +16,29 @@ export interface DangerRow { date: string; p_below: number; reasons: string }
 export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
 export interface TimelineRow { day_offset: number; date: string; actual_net_cash_cents: number | null; actual_liquid_cents: number | null; continue_low_cents: number | null; continue_mid_cents: number | null; continue_high_cents: number | null; coach_low_cents: number | null; coach_mid_cents: number | null; coach_high_cents: number | null }
 export interface WhatifRow { day_offset: number; date: string; low_cents: number; mid_cents: number; high_cents: number; label: string }
+export interface CoachScenario {
+  incomeMult: number;
+  categoryMult: Partial<Record<"housing" | "utilities" | "groceries" | "other_spending" | "dining" | "transport" | "shopping", number>>;
+  oneOffCents: number;
+  oneOffInDays: number;
+  moveToDebtCents: number;
+  jobLossMonths: number;
+  cardAprBumpPct?: number;
+  purchase?: { kind: "car" | "home" | "other"; priceCents: number; downCents: number; aprPct: number; termMonths: number; inDays: number };
+  summary: string;
+}
+export interface ScenarioForecastPoint { day_offset: number; date: string; low_cents: number; mid_cents: number; high_cents: number; label: string }
+export interface PersistedFutureScenario {
+  scenario_type: "coach" | "user";
+  scenario: CoachScenario;
+  forecast: ScenarioForecastPoint[];
+}
 export interface CoachActionRow { kind: string; amount_cents: number; fraction: number; annual_saving_cents: number; p_low_before: number; p_low_after: number; detail: string; driver: string; es_before_cents: number; es_after_cents: number }
 export interface ForecastRunRow { scenario: string; label: string; p_low: number; threshold_cents: number; end_liquid_p5_cents: number; end_liquid_p50_cents: number; end_liquid_p95_cents: number; horizon_days: number }
 export interface GoalRow { goal_id: string; name: string; kind: string; target_cents: number; target_date: string }
 export interface GoalResultRow { goal_id: string; days_to_goal: number; p_success: number; low_cents: number; mid_cents: number; high_cents: number; needed_80_cents: number | null; needed_95_cents: number | null; p_with_needed_80: number | null; needed_share_of_extras: number | null }
 export interface CustomerRow { customer_id: string; credit_limit_cents: number }
+
 
 export interface CustomerData {
   customer: CustomerRow[];
@@ -36,6 +54,7 @@ export interface CustomerData {
   qa?: QaRow[];
   timeline_360?: TimelineRow[];
   timeline_whatif?: WhatifRow[];
+  future_scenario?: PersistedFutureScenario[];
   coach_action?: CoachActionRow[];
   forecast_run?: ForecastRunRow[];
   goal?: GoalRow[];
@@ -138,11 +157,10 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
     credit: {
       name: "Credit",
       primary: { label: "Card balance", value: money(cardBal) },
-      change: cardPay ? (cardPay.payoff_month ? `Paid off ${monthLabel(cardPay.payoff_month)} at today's payments` : "Not shrinking at today's payments") : undefined,
+      change: cardPay ? (cardPay.payoff_month ? `Paid off ${monthLabel(cardPay.payoff_month)} at today's payments` : undefined) : undefined,
       metrics: [
         { label: "Available credit", value: money(Math.max(0, limit - cardBal)) },
         { label: "APR", value: `${(card[0]?.apr_pct ?? 0).toFixed(1)}%` },
-        ...(cardPay ? [{ label: "Paid off with the plan", value: payoffLabel(cardPay.coach_payoff_months, cardPay.coach_payoff_month) }] : []),
       ],
       progress: snap?.utilization != null ? { label: "Credit utilization", value: Math.round(100 * snap.utilization), detail: `${pct(snap.utilization, 0)} of credit limit used` } : undefined,
     },
@@ -159,7 +177,6 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
     loan: {
       name: "Loans",
       primary: { label: "Remaining loan debt", value: money(sum(loans)) },
-      change: plan ? `Debt-free except mortgage: ${monthLabel(plan.consumer_free_month)} → ${monthLabel(plan.coach_consumer_free_month)} with the plan` : undefined,
       metrics: loans.map(l => {
         const p = payoff.get(l.account_id);
         return { label: `${prettyType(l.account_type)} · ${l.apr_pct}% APR · ${money(l.balance_cents)}`, value: p ? `Paid off ${payoffLabel(p.payoff_months, p.payoff_month)} (plan: ${payoffLabel(p.coach_payoff_months, p.coach_payoff_month)})` : money(l.monthly_payment_cents) + "/mo" };

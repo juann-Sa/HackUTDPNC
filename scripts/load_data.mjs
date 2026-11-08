@@ -37,7 +37,25 @@ function cents(s) {
   const v = Number(w) * 100 + Number((f + '00').slice(0, 2));
   return neg ? -v : v;
 }
+// Optional HTTP transport avoids Windows command-line limits for large row batches.
+// The token stays in the process environment; data travels through stdin.
+const httpCall = String.raw`
+const chunks = [];
+for await (const chunk of process.stdin) chunks.push(chunk);
+const { server, db, name, args } = JSON.parse(Buffer.concat(chunks).toString());
+const response = await fetch(server.replace(/\/$/, '') + '/v1/database/' + db + '/call/' + name, {
+  method: 'POST', headers: { Authorization: 'Bearer ' + process.env.ST360_LOAD_TOKEN, 'Content-Type': 'application/json' }, body: JSON.stringify(args)
+});
+if (!response.ok) { console.error(name + ' failed (' + response.status + '): ' + (await response.text()).slice(0, 300)); process.exit(1); }
+`;
 function call(reducer, ...args) {
+  if (process.env.ST360_LOAD_TOKEN) {
+    execFileSync(process.execPath, ['--input-type=module', '-e', httpCall], {
+      input: JSON.stringify({ server: SERVER, db: DB, name: reducer, args }),
+      stdio: ['pipe', 'ignore', 'inherit'], maxBuffer: 64 * 1024 * 1024,
+    });
+    return;
+  }
   execFileSync('spacetime', ['call', '--server', SERVER, DB, reducer, ...args.map(a => JSON.stringify(a))], {
     stdio: ['ignore', 'ignore', 'inherit'],
     maxBuffer: 64 * 1024 * 1024,

@@ -2,12 +2,11 @@
 
 import Link from 'next/link'
 
-export type AppSection = 'home' | 'coach' | 'health' | 'future'
+export type AppSection = 'past' | 'home' | 'coach' | 'health' | 'future'
 
 const TABS: { id: AppSection; href: string; label: string }[] = [
+  { id: 'past', href: '/past', label: 'Past' },
   { id: 'home', href: '/home', label: 'Home' },
-  { id: 'coach', href: '/coach', label: 'Coach' },
-  { id: 'health', href: '/life-cycle', label: 'Health' },
   { id: 'future', href: '/future', label: 'Future' },
 ]
 

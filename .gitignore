@@ -10,3 +10,8 @@ spacetime.local.json
 analytics/.bundle_imported.tgz
 .env.local
 Claude outputs/
+
+# build output / caches
+.next/
+.npm-cache/
+*.tsbuildinfo

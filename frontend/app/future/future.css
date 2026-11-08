@@ -1,0 +1,70 @@
+.pnc-dash .future-main{padding-top:24px}
+.pnc-dash .future-heading{margin-bottom:22px}
+.pnc-dash .future-heading h1{font-size:33px;font-weight:500;letter-spacing:-1.3px;line-height:1.3}
+.pnc-dash .future-heading p{margin:8px 0 0;color:#737373;font-size:13px}
+.pnc-dash .future-overview{display:grid;grid-template-columns:minmax(0,1.08fr) minmax(360px,.92fr);gap:24px;align-items:stretch}
+.pnc-dash .future-forecast-stack{display:grid;grid-template-rows:minmax(430px,1fr) auto;gap:18px;min-width:0;height:100%}
+.pnc-dash .future-panel{min-width:0;border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 4px 16px rgba(23,23,23,.07),0 1px 3px rgba(23,23,23,.04);overflow:hidden}
+.pnc-dash .future-forecast-stack>.future-panel:first-child{display:flex;flex-direction:column}
+.pnc-dash .future-panel .panel-heading{padding:22px 24px 0}
+.pnc-dash .future-panel h2{font-size:20px;letter-spacing:-.55px;font-weight:500}
+.pnc-dash .future-panel .future-panel-subtitle{margin:6px 0 0;color:#737373;font-size:12px}
+.pnc-dash .future-legend{display:flex;flex-wrap:wrap;gap:14px;padding:20px 24px 0;color:#737373;font-size:10px}
+.pnc-dash .future-legend span{display:inline-flex;align-items:center;gap:7px}
+.pnc-dash .future-legend i{display:inline-block;width:14px;height:2px;border-radius:2px;background:#f58025}
+.pnc-dash .future-legend .baseline-key{background:#737373}
+.pnc-dash .future-legend .coach-key{background:#f58025}
+.pnc-dash .future-legend .user-key{background:#3976b9}
+.pnc-dash .future-chart{flex:1;min-height:310px;height:auto;margin:12px 15px 0}
+.pnc-dash .future-chart-note{border-top:1px solid #f1f1f1;padding:13px 24px;color:#8a8a8a;font-size:10px;line-height:1.5}
+.pnc-dash .future-chart-message{display:grid;flex:1;min-height:290px;place-items:center;padding:30px;text-align:center;color:#737373;font-size:13px;line-height:1.6}
+.pnc-dash .future-controls{padding-bottom:22px}
+.pnc-dash .future-purchase{padding-bottom:22px}
+.pnc-dash .future-purchase-fields{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:14px;margin:18px 24px 0}
+.pnc-dash .future-purchase-fields .future-select{grid-template-columns:minmax(0,1fr)}
+.pnc-dash .future-purchase-fields .future-select select{width:100%}
+.pnc-dash .future-purchase-amount{display:grid;align-content:start;gap:7px;color:#525252;font-size:12px}
+.pnc-dash .future-currency-input{display:flex;align-items:center;gap:7px;min-height:36px;padding:0 10px;border:1px solid #e0e0e0;border-radius:8px;color:#737373}
+.pnc-dash .future-currency-input:focus-within{outline:2px solid #f58025;outline-offset:1px}
+.pnc-dash .future-currency-input input{width:100%;min-width:0;border:0;outline:0;background:transparent;color:#171717;font:inherit;font-size:13px;font-variant-numeric:tabular-nums}
+.pnc-dash .future-currency-input input::-webkit-inner-spin-button,.pnc-dash .future-currency-input input::-webkit-outer-spin-button{-webkit-appearance:none;margin:0}
+.pnc-dash .future-currency-input input[type=number]{-moz-appearance:textfield}
+.pnc-dash .future-purchase-status{margin:12px 24px 0;color:#737373;font-size:11px}
+.pnc-dash .future-slider-list{display:grid;gap:15px;margin:20px 24px 0}
+.pnc-dash .future-slider{display:grid;gap:8px;min-width:0}
+.pnc-dash .future-slider-label{display:flex;justify-content:space-between;align-items:baseline;gap:12px;font-size:12px;color:#525252}
+.pnc-dash .future-slider-label output{color:#171717;font-size:12px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
+.pnc-dash .future-slider input[type=range]{width:100%;height:4px;margin:4px 0;accent-color:#f58025;cursor:pointer}
+.pnc-dash .future-advanced-controls{margin:18px 24px 0;padding-top:14px;border-top:1px solid #f1f1f1}
+.pnc-dash .future-advanced-controls summary{cursor:pointer;color:#525252;font-size:12px;font-weight:500}
+.pnc-dash .future-advanced-controls .future-slider-list{margin:16px 0 0}
+.pnc-dash .future-select{display:grid;grid-template-columns:1fr minmax(100px,.8fr);align-items:center;gap:10px;font-size:12px;color:#525252}
+.pnc-dash .future-select select{min-width:0;padding:8px 10px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;color:#171717;font:inherit}
+.pnc-dash .future-reset-button,.pnc-dash .future-apply-button{display:block;width:calc(100% - 48px);min-height:40px;margin:18px 24px 0;border-radius:8px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+.pnc-dash .future-reset-button{border:1px solid #e8e8e8;background:#fff;color:#525252}
+.pnc-dash .future-apply-button{border:0;background:#f58025;color:#fff}
+.pnc-dash .future-reset-button:disabled,.pnc-dash .future-apply-button:disabled{opacity:.5;cursor:default}
+.pnc-dash .future-control-error{margin:12px 24px 0;color:#9b1c1c;font-size:12px}
+.pnc-dash .future-control-note{margin:12px 24px 0;color:#8a8a8a;font-size:10px;line-height:1.5}
+.pnc-dash .future-page>.future-main>.coach-panel{margin-top:24px;padding-bottom:22px}
+.pnc-dash .future-page>.future-main>.coach-panel .panel-heading{padding-bottom:16px}
+.pnc-dash .future-page>.future-main>.coach-panel .coach-examples{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
+.pnc-dash .future-page>.future-main>.coach-panel .coach-examples button{text-align:left;line-height:1.45}
+.pnc-dash .future-page .live-error{margin-bottom:18px}
+@media(max-width:980px){
+  .pnc-dash .future-overview{grid-template-columns:minmax(0,1fr) minmax(320px,.9fr);gap:18px}
+  .pnc-dash .future-chart{height:285px}
+}
+@media(max-width:760px){
+  .pnc-dash .future-main{padding:20px}
+  .pnc-dash .future-heading h1{font-size:27px}
+  .pnc-dash .future-overview{grid-template-columns:minmax(0,1fr)}
+  .pnc-dash .future-chart{height:280px}
+}
+@media(max-width:560px){
+  .pnc-dash .future-chart{height:250px;margin-left:7px;margin-right:7px}
+  .pnc-dash .future-panel .panel-heading{padding-left:18px;padding-right:18px}
+  .pnc-dash .future-slider-list,.pnc-dash .future-advanced-controls,.pnc-dash .future-purchase-fields{margin-left:18px;margin-right:18px}
+  .pnc-dash .future-reset-button,.pnc-dash .future-apply-button{width:calc(100% - 36px);margin-left:18px;margin-right:18px}
+  .pnc-dash .future-page>.future-main>.coach-panel .coach-examples{grid-template-columns:minmax(0,1fr)}
+}

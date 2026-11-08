@@ -1,0 +1,19 @@
+﻿.life-cycle-page{min-height:100vh;background:#fff;color:#171717;font-family:var(--font);font-size:14px;-webkit-font-smoothing:antialiased}
+.life-cycle-main{max-width:1440px;margin:0 auto;padding:24px 48px 40px}
+.life-cycle-main h1{font-size:33px;font-weight:500;letter-spacing:-1.3px;line-height:1.3}
+.life-cycle-main h2{font-size:20px;font-weight:500;letter-spacing:-.55px}
+.health-panel{min-width:0;border:1px solid #e8e8e8;border-radius:12px;background:#fff;box-shadow:0 4px 16px rgba(23,23,23,.07),0 1px 3px rgba(23,23,23,.04)}
+.health-range{display:flex;align-items:center;gap:4px;border:1px solid #e8e8e8;border-radius:8px;background:#fff}
+.life-cycle-main button,.life-cycle-main input{font-family:inherit}
+.life-cycle-main .grid{gap:24px}
+@media(min-width:1500px){.life-cycle-main{padding-top:28px}}
+@media(max-width:1050px){.life-cycle-main{padding-left:28px;padding-right:28px}}
+@media(max-width:760px){.life-cycle-main{padding:20px}.life-cycle-main h1{font-size:27px}.life-cycle-main .grid{gap:16px}}
+@media(prefers-reduced-motion:reduce){.life-cycle-page *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+.life-cycle-page,.life-cycle-main,.health-header .topbar{background:#fff}
+.health-header .topbar nav>a{color:#171717}
+.life-cycle-main h1{color:#171717;margin:0}
+.health-range{gap:2px;border:0;padding:0;background:#fff}
+.health-range button{font:inherit;font-size:9px;border:0;background:transparent;border-radius:5px;padding:6px 8px;color:#888;cursor:pointer;transition:background 180ms,color 180ms}
+.health-range button.active{background:#fff0e5;color:#ae4d08;font-weight:600}
+.health-range button:focus-visible{outline:2px solid #f58025;outline-offset:3px}
