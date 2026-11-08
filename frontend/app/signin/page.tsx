@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, type ChangeEvent, type FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import AuthLayout from '@/components/AuthLayout/AuthLayout'
 import './signin.css'
 
@@ -15,6 +16,7 @@ interface SignInValues {
 type SignInErrors = Partial<Record<keyof SignInValues, string>>
 
 export default function SignIn() {
+  const router = useRouter()
   const [values, setValues] = useState<SignInValues>({
     email: '',
     password: '',
@@ -22,7 +24,6 @@ export default function SignIn() {
   })
   const [errors, setErrors] = useState<SignInErrors>({})
   const [showPassword, setShowPassword] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
 
   const update = (e: ChangeEvent<HTMLInputElement>) => {
     const { name, value, type, checked } = e.target
@@ -48,9 +49,8 @@ export default function SignIn() {
     const next = validate()
     setErrors(next)
     if (Object.keys(next).length === 0) {
-      setSubmitted(true)
-      // No backend yet — this is where you'd call your auth API.
-      console.log('Sign in:', values)
+      // Demo navigation only; no authentication API is called.
+      router.push('/home')
     }
   }
 
@@ -61,15 +61,6 @@ export default function SignIn() {
       altLinkText="Create an account"
       altLinkTo="/signup"
     >
-      {submitted && (
-        <div className="alert" role="status">
-          <span>
-            You&rsquo;re signed in as <strong>{values.email}</strong>. This is a demo —
-            connect your auth API.
-          </span>
-        </div>
-      )}
-
       <form className="auth-form" onSubmit={onSubmit} noValidate>
         <div className="field">
           <label className="field__label" htmlFor="email">

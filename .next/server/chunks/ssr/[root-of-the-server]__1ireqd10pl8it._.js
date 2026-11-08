@@ -1,0 +1,3 @@
+module.exports=[18622,(a,b,c)=>{b.exports=a.x("next/dist/compiled/next-server/app-page-turbo.runtime.prod.js",()=>require("next/dist/compiled/next-server/app-page-turbo.runtime.prod.js"))},33290,a=>{"use strict";var b=a.i(7997);a.s(["default",0,function({children:a}){return(0,b.jsx)("html",{lang:"en",children:(0,b.jsx)("body",{children:a})})},"metadata",0,{title:"PNC | Financial Health Navigator",description:"Your 360° view of financial wellbeing. Hackathon dashboard with sample data."}])},70864,function(a){a.n(a.i(33290))},24951,(a,b,c)=>{"use strict";b.exports=a.r(18622)},7997,(a,b,c)=>{"use strict";b.exports=a.r(24951).vendored["react-rsc"].ReactJsxRuntime}];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__1ireqd10pl8it._.js.map

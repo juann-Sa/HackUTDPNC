@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 4, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/cheon/HackUTD%2026/HackUTDPNC/app/layout.tsx"],"sourcesContent":["import type { Metadata } from \"next\";\nimport \"@fontsource/geist/400.css\";\nimport \"@fontsource/geist/500.css\";\nimport \"@fontsource/geist/600.css\";\nimport \"./globals.css\";\nexport const metadata: Metadata = { title: \"PNC | Financial Health Navigator\", description: \"Your 360° view of financial wellbeing. Hackathon dashboard with sample data.\" };\nexport default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) { return <html lang=\"en\"><body>{children}</body></html>; }\r\n"],"names":["metadata","title","description","RootLayout","children","lang"],"mappings":";;;;;;;;;;;;AAKO,MAAMA,WAAqB;IAAEC,OAAO;IAAoCC,aAAa;AAA+E;AAC5J,SAASC,WAAW,EAAEC,QAAQ,EAA2C;IAAI,qBAAO,8OAAC;QAAKC,MAAK;kBAAK,cAAA,8OAAC;sBAAMD;;;;;;;;;;;AAAyB"}},
+    {"offset": {"line": 44, "column": 0}, "map": {"version":3,"sources":["file:///C:/Users/cheon/HackUTD%2026/HackUTDPNC/node_modules/next/src/server/route-modules/app-page/vendored/rsc/react-jsx-dev-runtime.ts"],"sourcesContent":["module.exports = (\n  require('../../module.compiled') as typeof import('../../module.compiled')\n).vendored['react-rsc']!.ReactJsxDevRuntime\n"],"names":["module","exports","require","vendored","ReactJsxDevRuntime"],"mappings":"AAAAA,OAAOC,OAAO,GACZC,QAAQ,4HACRC,QAAQ,CAAC,YAAY,CAAEC,kBAAkB","ignoreList":[0]}}]
+}
