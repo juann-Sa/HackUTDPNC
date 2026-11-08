@@ -1,0 +1,128 @@
+{
+  "wape_pct_category_level": {
+    "pred_model": 2.76,
+    "pred_level_x_season": 3.0,
+    "pred_seasonal_naive": 4.08,
+    "pred_mean6": 5.66,
+    "pred_last": 6.84
+  },
+  "wape_pct_household_total": {
+    "pred_model": 2.54,
+    "pred_level_x_season": 2.84,
+    "pred_seasonal_naive": 3.85,
+    "pred_mean6": 4.68,
+    "pred_last": 6.06
+  },
+  "wape_pct_by_category": {
+    "dining": {
+      "pred_model": 3.18,
+      "pred_level_x_season": 3.33,
+      "pred_seasonal_naive": 4.34,
+      "pred_mean6": 6.4,
+      "pred_last": 4.63
+    },
+    "groceries": {
+      "pred_model": 2.78,
+      "pred_level_x_season": 2.92,
+      "pred_seasonal_naive": 4.19,
+      "pred_mean6": 3.82,
+      "pred_last": 5.32
+    },
+    "housing": {
+      "pred_model": 2.37,
+      "pred_level_x_season": 2.8,
+      "pred_seasonal_naive": 3.88,
+      "pred_mean6": 2.49,
+      "pred_last": 3.03
+    },
+    "other_spending": {
+      "pred_model": 2.99,
+      "pred_level_x_season": 3.33,
+      "pred_seasonal_naive": 4.18,
+      "pred_mean6": 4.7,
+      "pred_last": 5.96
+    },
+    "shopping": {
+      "pred_model": 2.84,
+      "pred_level_x_season": 3.14,
+      "pred_seasonal_naive": 4.23,
+      "pred_mean6": 4.03,
+      "pred_last": 5.69
+    },
+    "transport": {
+      "pred_model": 3.41,
+      "pred_level_x_season": 3.22,
+      "pred_seasonal_naive": 4.38,
+      "pred_mean6": 13.8,
+      "pred_last": 8.16
+    },
+    "utilities": {
+      "pred_model": 2.98,
+      "pred_level_x_season": 2.95,
+      "pred_seasonal_naive": 4.02,
+      "pred_mean6": 12.69,
+      "pred_last": 18.14
+    }
+  },
+  "wape_pct_by_horizon": {
+    "1": {
+      "pred_model": 3.34,
+      "pred_level_x_season": 3.79,
+      "pred_seasonal_naive": 4.97,
+      "pred_mean6": 5.25,
+      "pred_last": 6.4
+    },
+    "2": {
+      "pred_model": 2.62,
+      "pred_level_x_season": 2.71,
+      "pred_seasonal_naive": 3.68,
+      "pred_mean6": 5.02,
+      "pred_last": 6.56
+    },
+    "3": {
+      "pred_model": 2.66,
+      "pred_level_x_season": 2.72,
+      "pred_seasonal_naive": 4.09,
+      "pred_mean6": 6.89,
+      "pred_last": 8.44
+    },
+    "4": {
+      "pred_model": 3.05,
+      "pred_level_x_season": 3.32,
+      "pred_seasonal_naive": 4.36,
+      "pred_mean6": 8.09,
+      "pred_last": 9.65
+    },
+    "5": {
+      "pred_model": 2.6,
+      "pred_level_x_season": 2.99,
+      "pred_seasonal_naive": 3.42,
+      "pred_mean6": 4.65,
+      "pred_last": 5.86
+    },
+    "6": {
+      "pred_model": 2.29,
+      "pred_level_x_season": 2.44,
+      "pred_seasonal_naive": 3.92,
+      "pred_mean6": 3.85,
+      "pred_last": 3.87
+    }
+  },
+  "coverage_90pct_band": 0.894,
+  "feature_gain": {
+    "h": 11,
+    "moy": 2134,
+    "cat": 1136,
+    "seas_target": 169365,
+    "seas_origin": 0,
+    "dev_last": 183,
+    "dev_mean3": 226,
+    "trend6": 41,
+    "ly_dev": 7890,
+    "hist_len": 35,
+    "spend_to_income": 6316
+  },
+  "train_rows": 15750,
+  "test_rows": 1260,
+  "rounds": 72
+}
