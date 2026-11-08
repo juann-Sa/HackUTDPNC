@@ -14,7 +14,11 @@ import LoadLedgerReducer from "../load_ledger_reducer";
 import LoadStatementsReducer from "../load_statements_reducer";
 import RecomputeAllReducer from "../recompute_all_reducer";
 import RecomputeCustomerReducer from "../recompute_customer_reducer";
+import RemoveExternalAccountReducer from "../remove_external_account_reducer";
 import ResetDataReducer from "../reset_data_reducer";
+import RunForecastReducer from "../run_forecast_reducer";
+import RunWhatIfReducer from "../run_what_if_reducer";
+import UpsertPlaidAccountsReducer from "../upsert_plaid_accounts_reducer";
 
 export type AddExternalAccountParams = __Infer<typeof AddExternalAccountReducer>;
 export type Generate180DayProjectionParams = __Infer<typeof Generate180DayProjectionReducer>;
@@ -24,5 +28,9 @@ export type LoadLedgerParams = __Infer<typeof LoadLedgerReducer>;
 export type LoadStatementsParams = __Infer<typeof LoadStatementsReducer>;
 export type RecomputeAllParams = __Infer<typeof RecomputeAllReducer>;
 export type RecomputeCustomerParams = __Infer<typeof RecomputeCustomerReducer>;
+export type RemoveExternalAccountParams = __Infer<typeof RemoveExternalAccountReducer>;
 export type ResetDataParams = __Infer<typeof ResetDataReducer>;
+export type RunForecastParams = __Infer<typeof RunForecastReducer>;
+export type RunWhatIfParams = __Infer<typeof RunWhatIfReducer>;
+export type UpsertPlaidAccountsParams = __Infer<typeof UpsertPlaidAccountsReducer>;
 

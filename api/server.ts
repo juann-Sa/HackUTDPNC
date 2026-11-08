@@ -65,7 +65,19 @@ app.use(
     },
     apiKey,
     addAccounts: async (rows) => {
-      await connection.reducers.addExternalAccount({ rows });
+      await connection.reducers.upsertPlaidAccounts({
+        rows: rows.map((row) => ({
+          accountId: row.account_id,
+          customerId: row.customer_id,
+          institution: row.institution,
+          nickname: row.nickname,
+          accountType: row.account_type,
+          balanceCents: row.balance_cents,
+          aprPct: row.apr_pct,
+          annualYieldPct: row.annual_yield_pct,
+          monthlyPaymentCents: row.monthly_payment_cents,
+        })),
+      });
     },
   }),
 );

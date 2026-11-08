@@ -1,16 +1,27 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { AccountSubtype, AccountType, type AccountBase } from "plaid/legacy";
-import type { Account } from "./spacetime_bindings/types";
 
 interface PlaidProvider {
   exchangePublicToken: (publicToken: string) => Promise<string>;
   getAccounts: (accessToken: string) => Promise<AccountBase[]>;
 }
 
+export interface PlaidExternalAccount {
+  account_id: string;
+  customer_id: string;
+  institution: string;
+  nickname: string;
+  account_type: string;
+  balance_cents: number;
+  apr_pct: number;
+  annual_yield_pct: number;
+  monthly_payment_cents: number;
+}
+
 interface ConnectBankDependencies {
   plaid: PlaidProvider;
-  addAccounts: (rows: Account[]) => Promise<void>;
+  addAccounts: (rows: PlaidExternalAccount[]) => Promise<void>;
   apiKey: string;
 }
 
@@ -73,7 +84,7 @@ function mapAccountType(account: AccountBase): string | undefined {
 function mapPlaidAccount(
   account: AccountBase,
   customerId: string,
-): Account | undefined {
+): PlaidExternalAccount | undefined {
   const accountType = mapAccountType(account);
   const balance = account.balances.current;
   if (
@@ -89,14 +100,15 @@ function mapPlaidAccount(
   if (!Number.isSafeInteger(balanceCents)) return undefined;
 
   return {
-    accountId: `plaid_${account.account_id}`,
-    customerId,
-    accountType,
-    balanceCents,
-    openingBalanceCents: balanceCents,
-    monthlyPaymentCents: 0,
-    aprPct: 0,
-    annualYieldPct: 0,
+    account_id: account.account_id,
+    customer_id: customerId,
+    institution: "Plaid",
+    nickname: account.name.slice(0, 60),
+    account_type: accountType,
+    balance_cents: balanceCents,
+    apr_pct: 0,
+    annual_yield_pct: 0,
+    monthly_payment_cents: 0,
   };
 }
 
@@ -136,7 +148,9 @@ export function createConnectBankRouter({
       const accounts = await plaid.getAccounts(accessToken);
       const rows = accounts
         .map((plaidAccount) => mapPlaidAccount(plaidAccount, customerId))
-        .filter((account): account is Account => account !== undefined);
+        .filter(
+          (account): account is PlaidExternalAccount => account !== undefined,
+        );
 
       if (rows.length === 0) {
         res.status(422).json({

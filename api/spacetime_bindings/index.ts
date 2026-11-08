@@ -42,9 +42,14 @@ import LoadLedgerReducer from "./load_ledger_reducer";
 import LoadStatementsReducer from "./load_statements_reducer";
 import RecomputeAllReducer from "./recompute_all_reducer";
 import RecomputeCustomerReducer from "./recompute_customer_reducer";
+import RemoveExternalAccountReducer from "./remove_external_account_reducer";
 import ResetDataReducer from "./reset_data_reducer";
+import RunForecastReducer from "./run_forecast_reducer";
+import RunWhatIfReducer from "./run_what_if_reducer";
+import UpsertPlaidAccountsReducer from "./upsert_plaid_accounts_reducer";
 
 // Import all procedure arg schemas
+import * as NarrateProcedure from "./narrate_procedure";
 
 // Import all table schema definitions
 import AccountRow from "./account_table";
@@ -52,13 +57,23 @@ import BookLineRow from "./book_line_table";
 import BookSnapshotRow from "./book_snapshot_table";
 import CarryMoveRow from "./carry_move_table";
 import CarrySummaryRow from "./carry_summary_table";
+import CoachActionRow from "./coach_action_table";
 import CustomerRow from "./customer_table";
 import DailyLiquidRow from "./daily_liquid_table";
+import ExternalAccountRow from "./external_account_table";
 import FinancialProjectionRow from "./financial_projection_table";
+import ForecastAssumptionRow from "./forecast_assumption_table";
+import ForecastBandRow from "./forecast_band_table";
+import ForecastRunRow from "./forecast_run_table";
+import FrontierPointRow from "./frontier_point_table";
 import LedgerEntryRow from "./ledger_entry_table";
+import NarrationRow from "./narration_table";
 import PnlMonthRow from "./pnl_month_table";
+import RiskSourceRow from "./risk_source_table";
+import SensitivityRow from "./sensitivity_table";
 import SpendingMonthRow from "./spending_month_table";
 import StatementRow from "./statement_table";
+import Timeline360Row from "./timeline_360_table";
 import ValidationIssueRow from "./validation_issue_table";
 
 /** Type-only namespace exports for generated type groups. */
@@ -129,6 +144,20 @@ const tablesSchema = __schema({
       { name: 'carry_summary_customer_id_key', constraint: 'unique', columns: ['customerId'] },
     ],
   }, CarrySummaryRow),
+  coachAction: __table({
+    name: 'coach_action',
+    indexes: [
+      { accessor: 'action_id', name: 'coach_action_action_id_idx_btree', algorithm: 'btree', columns: [
+        'actionId',
+      ] },
+      { accessor: 'customer_id', name: 'coach_action_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'coach_action_action_id_key', constraint: 'unique', columns: ['actionId'] },
+    ],
+  }, CoachActionRow),
   customer: __table({
     name: 'customer',
     indexes: [
@@ -154,6 +183,20 @@ const tablesSchema = __schema({
       { name: 'daily_liquid_daily_id_key', constraint: 'unique', columns: ['dailyId'] },
     ],
   }, DailyLiquidRow),
+  externalAccount: __table({
+    name: 'external_account',
+    indexes: [
+      { accessor: 'account_id', name: 'external_account_account_id_idx_btree', algorithm: 'btree', columns: [
+        'accountId',
+      ] },
+      { accessor: 'customer_id', name: 'external_account_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'external_account_account_id_key', constraint: 'unique', columns: ['accountId'] },
+    ],
+  }, ExternalAccountRow),
   financialProjection: __table({
     name: 'financial_projection',
     indexes: [
@@ -168,6 +211,59 @@ const tablesSchema = __schema({
       { name: 'financial_projection_projection_id_key', constraint: 'unique', columns: ['projectionId'] },
     ],
   }, FinancialProjectionRow),
+  forecastAssumption: __table({
+    name: 'forecast_assumption',
+    indexes: [
+      { accessor: 'customer_id', name: 'forecast_assumption_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'forecast_assumption_customer_id_key', constraint: 'unique', columns: ['customerId'] },
+    ],
+  }, ForecastAssumptionRow),
+  forecastBand: __table({
+    name: 'forecast_band',
+    indexes: [
+      { accessor: 'band_id', name: 'forecast_band_band_id_idx_btree', algorithm: 'btree', columns: [
+        'bandId',
+      ] },
+      { accessor: 'customer_id', name: 'forecast_band_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'forecast_band_band_id_key', constraint: 'unique', columns: ['bandId'] },
+    ],
+  }, ForecastBandRow),
+  forecastRun: __table({
+    name: 'forecast_run',
+    indexes: [
+      { accessor: 'customer_id', name: 'forecast_run_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+      { accessor: 'run_id', name: 'forecast_run_run_id_idx_btree', algorithm: 'btree', columns: [
+        'runId',
+      ] },
+    ],
+    constraints: [
+      { name: 'forecast_run_run_id_key', constraint: 'unique', columns: ['runId'] },
+    ],
+  }, ForecastRunRow),
+  frontierPoint: __table({
+    name: 'frontier_point',
+    indexes: [
+      { accessor: 'customer_id', name: 'frontier_point_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+      { accessor: 'frontier_id', name: 'frontier_point_frontier_id_idx_btree', algorithm: 'btree', columns: [
+        'frontierId',
+      ] },
+    ],
+    constraints: [
+      { name: 'frontier_point_frontier_id_key', constraint: 'unique', columns: ['frontierId'] },
+    ],
+  }, FrontierPointRow),
   ledgerEntry: __table({
     name: 'ledger_entry',
     indexes: [
@@ -182,6 +278,20 @@ const tablesSchema = __schema({
       { name: 'ledger_entry_transaction_id_key', constraint: 'unique', columns: ['transactionId'] },
     ],
   }, LedgerEntryRow),
+  narration: __table({
+    name: 'narration',
+    indexes: [
+      { accessor: 'customer_id', name: 'narration_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+      { accessor: 'narration_id', name: 'narration_narration_id_idx_btree', algorithm: 'btree', columns: [
+        'narrationId',
+      ] },
+    ],
+    constraints: [
+      { name: 'narration_narration_id_key', constraint: 'unique', columns: ['narrationId'] },
+    ],
+  }, NarrationRow),
   pnlMonth: __table({
     name: 'pnl_month',
     indexes: [
@@ -196,6 +306,34 @@ const tablesSchema = __schema({
       { name: 'pnl_month_pnl_id_key', constraint: 'unique', columns: ['pnlId'] },
     ],
   }, PnlMonthRow),
+  riskSource: __table({
+    name: 'risk_source',
+    indexes: [
+      { accessor: 'customer_id', name: 'risk_source_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+      { accessor: 'risk_id', name: 'risk_source_risk_id_idx_btree', algorithm: 'btree', columns: [
+        'riskId',
+      ] },
+    ],
+    constraints: [
+      { name: 'risk_source_risk_id_key', constraint: 'unique', columns: ['riskId'] },
+    ],
+  }, RiskSourceRow),
+  sensitivity: __table({
+    name: 'sensitivity',
+    indexes: [
+      { accessor: 'customer_id', name: 'sensitivity_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+      { accessor: 'sensitivity_id', name: 'sensitivity_sensitivity_id_idx_btree', algorithm: 'btree', columns: [
+        'sensitivityId',
+      ] },
+    ],
+    constraints: [
+      { name: 'sensitivity_sensitivity_id_key', constraint: 'unique', columns: ['sensitivityId'] },
+    ],
+  }, SensitivityRow),
   spendingMonth: __table({
     name: 'spending_month',
     indexes: [
@@ -224,6 +362,20 @@ const tablesSchema = __schema({
       { name: 'statement_statement_id_key', constraint: 'unique', columns: ['statementId'] },
     ],
   }, StatementRow),
+  timeline360: __table({
+    name: 'timeline_360',
+    indexes: [
+      { accessor: 'customer_id', name: 'timeline_360_customer_id_idx_btree', algorithm: 'btree', columns: [
+        'customerId',
+      ] },
+      { accessor: 'timeline_id', name: 'timeline_360_timeline_id_idx_btree', algorithm: 'btree', columns: [
+        'timelineId',
+      ] },
+    ],
+    constraints: [
+      { name: 'timeline_360_timeline_id_key', constraint: 'unique', columns: ['timelineId'] },
+    ],
+  }, Timeline360Row),
   validationIssue: __table({
     name: 'validation_issue',
     indexes: [
@@ -250,11 +402,16 @@ const reducersSchema = __reducers(
   __reducerSchema("load_statements", LoadStatementsReducer),
   __reducerSchema("recompute_all", RecomputeAllReducer),
   __reducerSchema("recompute_customer", RecomputeCustomerReducer),
+  __reducerSchema("remove_external_account", RemoveExternalAccountReducer),
   __reducerSchema("reset_data", ResetDataReducer),
+  __reducerSchema("run_forecast", RunForecastReducer),
+  __reducerSchema("run_what_if", RunWhatIfReducer),
+  __reducerSchema("upsert_plaid_accounts", UpsertPlaidAccountsReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */
 const proceduresSchema = __procedures(
+  __procedureSchema("narrate", NarrateProcedure.params, NarrateProcedure.returnType),
 );
 
 /** The remote SpacetimeDB module schema, both runtime and type information. */

@@ -3,7 +3,7 @@ import express from "express";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AccountSubtype, AccountType, type AccountBase } from "plaid/legacy";
 import { createConnectBankRouter } from "./connectBank";
-import type { Account } from "./spacetime_bindings/types";
+import type { PlaidExternalAccount } from "./connectBank";
 
 const apiKey = "hackathon-test-api-key-that-is-at-least-32-chars";
 
@@ -53,7 +53,7 @@ describe("POST /api/connect-bank", () => {
   it("exchanges the public token, maps USD accounts, and calls the reducer bridge", async () => {
     const exchangePublicToken = vi.fn(async () => "plaid-access-token");
     const getAccounts = vi.fn(async () => [plaidAccount]);
-    const addAccounts = vi.fn(async (_rows: Account[]) => {});
+    const addAccounts = vi.fn(async (_rows: PlaidExternalAccount[]) => {});
     const app = express();
     app.use(express.json());
     app.use(
@@ -84,14 +84,15 @@ describe("POST /api/connect-bank", () => {
     expect(getAccounts).toHaveBeenCalledWith("plaid-access-token");
     expect(addAccounts).toHaveBeenCalledWith([
       {
-        accountId: "plaid_plaid-checking-id",
-        customerId: "C001",
-        accountType: "checking",
-        balanceCents: 12345,
-        openingBalanceCents: 12345,
-        monthlyPaymentCents: 0,
-        aprPct: 0,
-        annualYieldPct: 0,
+        account_id: "plaid-checking-id",
+        customer_id: "C001",
+        institution: "Plaid",
+        nickname: "Checking",
+        account_type: "checking",
+        balance_cents: 12345,
+        apr_pct: 0,
+        annual_yield_pct: 0,
+        monthly_payment_cents: 0,
       },
     ]);
   });
@@ -107,7 +108,7 @@ describe("POST /api/connect-bank", () => {
           exchangePublicToken,
           getAccounts: vi.fn(async () => [plaidAccount]),
         },
-        addAccounts: vi.fn(async (_rows: Account[]) => {}),
+        addAccounts: vi.fn(async (_rows: PlaidExternalAccount[]) => {}),
         apiKey,
       }),
     );

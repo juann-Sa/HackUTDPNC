@@ -10,12 +10,13 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  Account,
-} from "./types";
-
 export default {
-  get rows() {
-    return __t.array(Account);
-  },
+  customerId: __t.string(),
+  institution: __t.string(),
+  accountType: __t.string(),
+  nickname: __t.string(),
+  balanceCents: __t.f64(),
+  aprPct: __t.f64(),
+  annualYieldPct: __t.f64(),
+  monthlyPaymentCents: __t.f64(),
 };

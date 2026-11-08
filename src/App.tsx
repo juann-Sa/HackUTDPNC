@@ -1,234 +1,141 @@
-import React, { useState } from 'react';
+import type { FormEvent } from 'react';
+import { useMemo, useState } from 'react';
+import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react';
+import { reducers, tables } from './module_bindings';
 import './App.css';
-import { tables, reducers } from './module_bindings';
-import type * as Types from './module_bindings/types';
-import { useSpacetimeDB, useTable, useReducer } from 'spacetimedb/react';
-import { Identity, Timestamp } from 'spacetimedb';
 
-export type PrettyMessage = {
-  senderName: string;
-  text: string;
-  sent: Timestamp;
-  kind: 'system' | 'user';
-};
+const money = (cents: number | null | undefined) =>
+  cents == null
+    ? '—'
+    : new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+      }).format(cents / 100);
 
 function App() {
-  const [newName, setNewName] = useState('');
-  const [settingName, setSettingName] = useState(false);
-  const [systemMessages, setSystemMessages] = useState([] as Types.Message[]);
-  const [newMessage, setNewMessage] = useState('');
-
-  const { identity, isActive: connected } = useSpacetimeDB();
-  const setName = useReducer(reducers.setName);
-  const sendMessage = useReducer(reducers.sendMessage);
-
-  // Subscribe to all messages in the chat
-  const [messages] = useTable(tables.message);
-
-  // Subscribe to all online users in the chat
-  const [onlineUsers] = useTable(
-    tables.user.where(r => r.online.eq(true)),
-    {
-      onInsert: user => {
-        // All users being inserted here are online
-        const name = user.name || user.identity.toHexString().substring(0, 8);
-        setSystemMessages(prev => [
-          ...prev,
-          {
-            sender: Identity.zero(),
-            text: `${name} has connected.`,
-            sent: Timestamp.now(),
-          },
-        ]);
-      },
-      onDelete: user => {
-        // All users being deleted here are offline
-        const name = user.name || user.identity.toHexString().substring(0, 8);
-        setSystemMessages(prev => [
-          ...prev,
-          {
-            sender: Identity.zero(),
-            text: `${name} has disconnected.`,
-            sent: Timestamp.now(),
-          },
-        ]);
-      },
-    }
+  const { isActive } = useSpacetimeDB();
+  const [customers, customersReady] = useTable(tables.customer);
+  const [customerId, setCustomerId] = useState('');
+  const [status, setStatus] = useState('');
+  const generateProjection = useReducer(reducers.generate180DayProjection);
+  const [projectionRows, projectionReady] = useTable(
+    tables.financialProjection.where(row => row.customerId.eq(customerId))
+  );
+  const projections = useMemo(
+    () =>
+      [...projectionRows].sort((a, b) =>
+        a.month === b.month
+          ? a.recordType.localeCompare(b.recordType)
+          : a.month.localeCompare(b.month)
+      ),
+    [projectionRows]
   );
 
-  const [offlineUsers] = useTable(tables.user.where(r => r.online.eq(false)));
-  const users = [...onlineUsers, ...offlineUsers];
+  const submitProjection = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const requestedCustomerId = customerId.trim();
+    if (!requestedCustomerId) {
+      setStatus('Enter a customer ID to generate a projection.');
+      return;
+    }
 
-  const prettyMessages: PrettyMessage[] = messages
-    .concat(systemMessages)
-    .sort((a, b) => (a.sent.toDate() > b.sent.toDate() ? 1 : -1))
-    .map(message => {
-      const user = users.find(
-        u => u.identity.toHexString() === message.sender.toHexString()
+    setStatus('Generating six-month projection…');
+    try {
+      await generateProjection({ customerId: requestedCustomerId });
+      setStatus('Projection generated. Results are available below.');
+    } catch (error) {
+      console.error('Unable to generate projection:', error);
+      setStatus(
+        error instanceof Error
+          ? `Unable to generate projection: ${error.message}`
+          : 'Unable to generate projection.'
       );
-      return {
-        senderName: user?.name || message.sender.toHexString().substring(0, 8),
-        text: message.text,
-        sent: message.sent,
-        kind: Identity.zero().isEqual(message.sender) ? 'system' : 'user',
-      };
-    });
-
-  console.log('connected:', connected, 'identity:', identity?.toHexString());
-
-  if (!connected || !identity) {
-    return (
-      <div className="App">
-        <h1>Connecting...</h1>
-      </div>
-    );
-  }
-
-  const name = (() => {
-    const user = users.find(u => u.identity.isEqual(identity));
-    return user?.name || identity?.toHexString().substring(0, 8) || '';
-  })();
-
-  const onSubmitNewName = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setSettingName(false);
-    setName({ name: newName });
-  };
-
-  const onSubmitMessage = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setNewMessage('');
-    sendMessage({ text: newMessage })
-      .then(() => {
-        console.log('Message sent.');
-      })
-      .catch(err => {
-        console.error('Error sending message:', err);
-      });
+    }
   };
 
   return (
-    <div className="App">
-      <div className="profile">
-        <h1>Profile</h1>
-        {!settingName ? (
-          <>
-            <p>{name}</p>
-            <button
-              onClick={() => {
-                setSettingName(true);
-                setNewName(name);
-              }}
-            >
-              Edit Name
-            </button>
-          </>
-        ) : (
-          <form onSubmit={onSubmitNewName}>
-            <input
-              type="text"
-              aria-label="username input"
-              value={newName}
-              onChange={e => setNewName(e.target.value)}
-            />
-            <button type="submit">Submit</button>
-          </form>
-        )}
-      </div>
-      <div className="message-panel">
-        <h1>Messages</h1>
-        {prettyMessages.length < 1 && <p>No messages</p>}
-        <div className="messages">
-          {prettyMessages.map((message, key) => {
-            const sentDate = message.sent.toDate();
-            const now = new Date();
-            const isOlderThanDay =
-              now.getFullYear() !== sentDate.getFullYear() ||
-              now.getMonth() !== sentDate.getMonth() ||
-              now.getDate() !== sentDate.getDate();
-
-            const timeString = sentDate.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-            });
-            const dateString = isOlderThanDay
-              ? sentDate.toLocaleDateString([], {
-                  year: 'numeric',
-                  month: 'short',
-                  day: 'numeric',
-                }) + ' '
-              : '';
-
-            return (
-              <div
-                key={key}
-                className={
-                  message.kind === 'system' ? 'system-message' : 'user-message'
-                }
-              >
-                <p>
-                  <b>
-                    {message.kind === 'system' ? 'System' : message.senderName}
-                  </b>
-                  <span
-                    style={{
-                      fontSize: '0.8rem',
-                      marginLeft: '0.5rem',
-                      color: '#666',
-                    }}
-                  >
-                    {dateString}
-                    {timeString}
-                  </span>
-                </p>
-                <p>{message.text}</p>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      <div className="online" style={{ whiteSpace: 'pre-wrap' }}>
-        <h1>Online</h1>
+    <main className="dashboard">
+      <header className="dashboard-header">
         <div>
-          {onlineUsers.map((user, key) => (
-            <div key={key}>
-              <p>{user.name || user.identity.toHexString().substring(0, 8)}</p>
-            </div>
-          ))}
+          <p className="eyebrow">Spacetime 360</p>
+          <h1>Financial projection</h1>
+          <p>Review historical balances and generate a six-month outlook.</p>
         </div>
-        {offlineUsers.length > 0 && (
-          <div>
-            <h1>Offline</h1>
-            {offlineUsers.map((user, key) => (
-              <div key={key}>
-                <p>
-                  {user.name || user.identity.toHexString().substring(0, 8)}
-                </p>
-              </div>
+        <span className={`connection ${isActive ? 'connected' : ''}`}>
+          {isActive ? 'Connected' : 'Connecting…'}
+        </span>
+      </header>
+
+      <section className="projection-panel">
+        <form className="customer-form" onSubmit={submitProjection}>
+          <label htmlFor="customer-id">Customer ID</label>
+          <input
+            id="customer-id"
+            list="customer-ids"
+            value={customerId}
+            onChange={event => setCustomerId(event.target.value)}
+            placeholder={customersReady ? 'Choose or enter a customer ID' : 'Loading customers…'}
+          />
+          <datalist id="customer-ids">
+            {customers.map(customer => (
+              <option key={customer.customerId} value={customer.customerId} />
             ))}
+          </datalist>
+          <button type="submit" disabled={!isActive || !customerId.trim()}>
+            Generate projection
+          </button>
+        </form>
+
+        {status && <p className="status" role="status">{status}</p>}
+
+        <div className="projection-heading">
+          <h2>Projection data</h2>
+          <span>
+            {!projectionReady
+              ? 'Loading…'
+              : `${projections.length} ${projections.length === 1 ? 'row' : 'rows'}`}
+          </span>
+        </div>
+        {projections.length === 0 ? (
+          <p className="empty-state">
+            {customerId
+              ? 'No projection data yet. Generate a projection to populate this table.'
+              : 'Enter a customer ID to view projection data.'}
+          </p>
+        ) : (
+          <div className="table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Type</th>
+                  <th>Liquid balance</th>
+                  <th>Debt balance</th>
+                  <th>Income</th>
+                  <th>Expenses</th>
+                  <th>Debt payments</th>
+                  <th>Holiday spike</th>
+                </tr>
+              </thead>
+              <tbody>
+                {projections.map(row => (
+                  <tr key={row.projectionId}>
+                    <td>{row.month}</td>
+                    <td>{row.recordType}</td>
+                    <td>{money(row.liquidBalanceCents)}</td>
+                    <td>{money(row.debtBalanceCents)}</td>
+                    <td>{money(row.monthlyIncomeCents)}</td>
+                    <td>{money(row.monthlyExpensesCents)}</td>
+                    <td>{money(row.monthlyDebtPaymentsCents)}</td>
+                    <td>{row.holidayExpenseSpike ? 'Yes' : 'No'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
-      </div>
-      <div className="new-message">
-        <form
-          onSubmit={onSubmitMessage}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            width: '50%',
-            margin: '0 auto',
-          }}
-        >
-          <h3>New Message</h3>
-          <textarea
-            aria-label="message input"
-            value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-          ></textarea>
-          <button type="submit">Send</button>
-        </form>
-      </div>
-    </div>
+      </section>
+    </main>
   );
 }
 
