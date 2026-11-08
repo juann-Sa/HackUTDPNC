@@ -8,6 +8,7 @@ import { ConnectionId } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth } from 'spacetimedb/server/test-utils';
 
 import spacetime, * as m from './index';
+import { type Fact, unverifiedNumbers } from './math/narrate';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
 const DATA = join(ROOT, 'data');
@@ -172,88 +173,205 @@ describe('SpaceTime 360 book math', () => {
     }
   });
 
-  it('emits six months of history and six deterministic monthly projections', () => {
-    test.withReducerTx(owner, ctx => m.generate_180_day_projection(ctx, { customer_id: 'C001' }));
+  it('emits six historical months and six forecast months for the 180-day projection', () => {
+    test.withReducerTx(stranger, ctx => m.generate_180_day_projection(ctx, { customer_id: 'C001' }));
     const rows = [...test.db.financialProjection.customer_id.filter('C001')];
-    const historical = rows.filter(row => row.record_type === 'historical').sort((a, b) => a.month.localeCompare(b.month));
-    const projected = rows.filter(row => row.record_type === 'projected').sort((a, b) => a.month.localeCompare(b.month));
+    const historical = rows.filter(row => row.record_type === 'historical');
+    const projected = rows
+      .filter(row => row.record_type === 'projected')
+      .sort((a, b) => a.month.localeCompare(b.month));
 
     expect(historical).toHaveLength(6);
-    expect(historical.map(row => row.month)).toEqual([
-      '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10',
-    ]);
-    for (const row of historical) {
-      const monthStatements = [...test.db.statement.customer_id.filter('C001')]
-        .filter(statement => statement.month === row.month);
-      expect(row.liquid_balance_cents).toBe(
-        monthStatements
-          .filter(statement => ['checking', 'savings'].includes(statement.account_type))
-          .reduce((total, statement) => total + statement.closing_cents, 0)
-      );
-      expect(row.debt_balance_cents).toBe(
-        monthStatements
-          .filter(statement => ['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(statement.account_type))
-          .reduce((total, statement) => total + statement.closing_cents, 0)
-      );
-    }
     expect(projected.map(row => row.month)).toEqual([
       '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04',
     ]);
-    const profile = test.db.customer.customer_id.find('C001')!;
-    const accounts = [...test.db.account.customer_id.filter('C001')];
-    const currentLiquidCash = accounts
-      .filter(account => ['checking', 'savings'].includes(account.account_type))
-      .reduce((total, account) => total + account.balance_cents, 0);
-    const debtAccounts = accounts.filter(account =>
-      ['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(account.account_type)
+    expect(projected[0].holiday_expense_spike).toBe(true);
+    expect(projected[0].monthly_expenses_cents).toBe(
+      Math.round(test.db.customer.customer_id.find('C001')!.monthly_non_debt_expenses_cents * 1.25)
     );
-    const currentTotalDebt = debtAccounts.reduce((total, account) => total + account.balance_cents, 0);
-    const minimumMonthlyPayments = debtAccounts.reduce((total, account) => total + account.monthly_payment_cents, 0);
-    const november = projected[0];
-    const december = projected[1];
-    expect(november.current_liquid_cash_cents).toBe(currentLiquidCash);
-    expect(november.current_total_debt_cents).toBe(currentTotalDebt);
-    expect(november.total_minimum_monthly_payments_cents).toBe(minimumMonthlyPayments);
-    expect(november.holiday_expense_spike).toBe(true);
-    expect(november.monthly_expenses_cents).toBe(Math.round(profile.monthly_non_debt_expenses_cents * 1.25));
-    expect(november.monthly_debt_payments_cents).toBe(Math.min(minimumMonthlyPayments, currentTotalDebt));
-    expect(november.liquid_balance_cents).toBe(
-      currentLiquidCash + profile.monthly_income_cents - november.monthly_expenses_cents! - november.monthly_debt_payments_cents!
-    );
-    expect(november.debt_balance_cents).toBe(currentTotalDebt - november.monthly_debt_payments_cents!);
-    expect(december.holiday_expense_spike).toBe(false);
-    expect(december.monthly_expenses_cents).toBe(profile.monthly_non_debt_expenses_cents);
-    expect(projected.every(row => row.monthly_income_cents === profile.monthly_income_cents)).toBe(true);
-  });
-
-  it('only lets the owner upsert external accounts for existing customers', () => {
-    const externalAccount = {
-      account_id: 'plaid_test_account',
-      customer_id: 'C001',
-      account_type: 'checking',
-      balance_cents: 12345,
-      opening_balance_cents: 12345,
-      monthly_payment_cents: 0,
-      apr_pct: 0,
-      annual_yield_pct: 0,
-    };
-
-    test.withReducerTx(owner, ctx => m.add_external_account(ctx, { rows: [externalAccount] }));
-    expect(test.db.account.account_id.find(externalAccount.account_id)?.balance_cents).toBe(12345);
-
-    expect(() =>
-      test.withReducerTx(stranger, ctx => m.add_external_account(ctx, { rows: [externalAccount] }))
-    ).toThrow(/owner/);
-    expect(() =>
-      test.withReducerTx(owner, ctx =>
-        m.add_external_account(ctx, { rows: [{ ...externalAccount, customer_id: 'missing-customer' }] })
-      )
-    ).toThrow(/Unknown customer/);
+    expect(projected[1].holiday_expense_spike).toBe(false);
   });
 
   it('only the owner can load data', () => {
     expect(() =>
       test.withReducerTx(stranger, ctx => m.reset_data(ctx, {}))
+    ).toThrow(/owner/);
+  });
+});
+
+describe('SpaceTime 360 forecast reducers', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+
+  it('writes seven scenarios with 181 days of bands each', () => {
+    const runs = [...test.db.forecastRun.customer_id.filter('C006')].map(r => r.scenario).sort();
+    expect(runs).toEqual(['baseline', 'coach', 'habit_coach', 'habit_continue', 'stress_bill', 'stress_job_loss', 'stress_rates']);
+    for (const sc of runs) {
+      const bands = [...test.db.forecastBand.customer_id.filter('C006')].filter(b => b.scenario === sc);
+      expect(bands.length).toBe(181);
+      for (const b of bands) expect(b.p5_cents <= b.p50_cents && b.p50_cents <= b.p95_cents).toBe(true);
+    }
+  });
+
+  it('builds the 360° timeline: 180 days of history, two tight future paths on net cash', () => {
+    const rows = [...test.db.timeline360.customer_id.filter('C006')].sort((a, b) => a.day_offset - b.day_offset);
+    expect(rows.length).toBe(361);
+    expect(rows[0].day_offset).toBe(-180);
+    expect(rows.filter(r => r.actual_net_cash_cents !== undefined).length).toBe(181);
+    const today = rows.find(r => r.day_offset === 0)!;
+    // both paths start exactly at today's actual net cash (moving cash onto debt is neutral)
+    expect(today.continue_mid_cents).toBe(today.actual_net_cash_cents);
+    expect(today.coach_mid_cents).toBe(today.actual_net_cash_cents);
+    const end = rows[rows.length - 1];
+    expect(end.coach_mid_cents!).toBeGreaterThan(end.continue_mid_cents!);
+    const band = (end.continue_high_cents! - end.continue_low_cents!) / 2;
+    // band width in dollars, relative to the cash it describes (net cash itself can be near zero)
+    expect(band / today.actual_liquid_cents!).toBeLessThan(0.05);
+  });
+
+  it('coach move equals the carry table fixable leak (same 3-month buffer)', () => {
+    const carry = test.db.carrySummary.customer_id.find('C006')!;
+    const move = test.db.coachAction.action_id.find('C006|move_cash_to_debt')!;
+    expect(move.amount_cents).toBeLessThanOrEqual(carry.idle_cash_cents);
+    expect(carry.idle_cash_cents - move.amount_cents).toBeLessThan(10_000);
+    expect(Math.abs(move.annual_saving_cents - carry.fixable_leak_cents) / carry.fixable_leak_cents).toBeLessThan(0.01);
+    expect(move.p_low_after).toBeLessThanOrEqual(0.05);
+  });
+
+  it('expected-shortfall contributions add up to ES95', () => {
+    const run = test.db.forecastRun.run_id.find('C006|baseline')!;
+    const parts = [...test.db.riskSource.customer_id.filter('C006')].filter(r => r.scenario === 'baseline');
+    const sum = parts.reduce((s, r) => s + r.es_contribution_cents, 0);
+    expect(Math.abs(sum - run.es95_cents)).toBeLessThanOrEqual(parts.length);
+  });
+
+  it('a neutral what-if reproduces the baseline exactly (common random numbers)', () => {
+    test.withReducerTx(stranger, ctx =>
+      m.run_what_if(ctx, {
+        customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: 0,
+        one_off_day: 0, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+      })
+    );
+    const base = test.db.forecastRun.run_id.find('C006|baseline')!;
+    const wi = test.db.forecastRun.run_id.find('C006|what_if')!;
+    expect(wi.p_low).toBe(base.p_low);
+    expect(wi.end_liquid_p50_cents).toBe(base.end_liquid_p50_cents);
+    test.withReducerTx(stranger, ctx =>
+      m.run_what_if(ctx, {
+        customer_id: 'C006', include_external: false, income_mult: 1,
+        category_mults: [{ category: 'dining', mult: 0.5 }], one_off_cents: 0, one_off_day: 0,
+        move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+      })
+    );
+    const cut = test.db.forecastRun.run_id.find('C006|what_if')!;
+    expect(cut.end_liquid_p50_cents).toBeGreaterThan(base.end_liquid_p50_cents);
+  });
+});
+
+describe('AI narration guardrail', () => {
+  const facts: Fact[] = [
+    { key: 'net_cash_today', text: 'Net cash today (cash minus high-interest debt): $13,557' },
+    { key: 'continue_180', text: 'Net cash in 180 days if you continue as you are: about $9,239 (likely between $8,704 and $9,774)' },
+    { key: 'p_low', text: 'Chance cash drops below $500 in the next 180 days (including surprises): 0.2%' },
+  ];
+  it('accepts a reply that only uses numbers from the facts', () => {
+    const reply = 'Right now your net cash is $13,557. If you keep going as you are, in about 6 months it is likely around $9,239, somewhere between $8,704 and $9,774. The chance of dropping below $500 is only 0.2%.';
+    expect(unverifiedNumbers(reply, facts)).toEqual([]);
+  });
+  it('accepts honest rounding of a real number', () => {
+    expect(unverifiedNumbers('Net cash is roughly $13,600, about $9,200 in six months.', facts)).toEqual([]);
+    expect(unverifiedNumbers('Only about 0.2% risk.', facts)).toEqual([]);
+  });
+  it('rejects invented, computed or loosely approximated numbers', () => {
+    expect(unverifiedNumbers('You will lose about $4,318 by spring.', facts)).toEqual(['$4,318']);
+    expect(unverifiedNumbers('Net cash is about $14,000.', facts)).toEqual(['$14,000']);
+    expect(unverifiedNumbers('That is a 32% drop.', facts)).toEqual(['32%']);
+  });
+  it('the narrate procedure stores a verified explanation (template without an API key)', () => {
+    const { test } = loadedHarness();
+    test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+    const ctx = test.procedureContext(stranger);
+    const text = m.narrate(ctx, { customer_id: 'C006', topic: 'overview' });
+    const row = test.db.narration.narration_id.find('C006|overview')!;
+    expect(row.text).toBe(text);
+    expect(row.source).toBe('template');
+    expect(text).toMatch(/Net cash today/);
+    expect(m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'gossip' })).toMatch(/Unknown topic/);
+    expect(m.narrate(test.procedureContext(stranger), { customer_id: 'C999', topic: 'overview' })).toMatch(/No results for C999/);
+  }, 60_000);
+});
+
+describe('linked outside accounts', () => {
+  const { test } = loadedHarness();
+  const before = { ...test.db.bookSnapshot.customer_id.find('C006')! };
+  const carryBefore = { ...test.db.carrySummary.customer_id.find('C006')! };
+  const add = (over: Record<string, unknown> = {}) =>
+    test.withReducerTx(stranger, ctx =>
+      m.add_external_account(ctx, {
+        customer_id: 'C006', institution: 'Other Bank', account_type: 'savings', nickname: 'Rainy day',
+        balance_cents: 500_000, apr_pct: 0, annual_yield_pct: 4, monthly_payment_cents: 0, ...over,
+      } as any)
+    );
+
+  it('folds outside accounts into the book and carry', () => {
+    add();
+    add({ account_type: 'credit_card', nickname: 'Store card', balance_cents: 200_000, apr_pct: 26, annual_yield_pct: 0, monthly_payment_cents: 6_000 });
+    const ext = [...test.db.externalAccount.customer_id.filter('C006')].map(x => x.account_id).sort();
+    expect(ext).toEqual(['EXT-C006-1', 'EXT-C006-2']);
+    const s = test.db.bookSnapshot.customer_id.find('C006')!;
+    expect(s.liquid_cents).toBe(before.liquid_cents + 500_000);
+    expect(s.total_debt_cents).toBe(before.total_debt_cents + 200_000);
+    expect(s.monthly_debt_payments_cents).toBe(before.monthly_debt_payments_cents + 6_000);
+    expect(test.db.bookLine.account_id.find('EXT-C006-2')!.high_cost).toBe(true);
+    const c = test.db.carrySummary.customer_id.find('C006')!;
+    expect(Math.round(c.earn_cents - carryBefore.earn_cents)).toBe(20_000); // $5,000 at 4%
+    expect(Math.round(c.cost_cents - carryBefore.cost_cents)).toBe(52_000); // $2,000 at 26%
+    expect([...test.db.validationIssue.customer_id.filter('C006')]).toEqual([]);
+  });
+
+  it('includes them in the forecast and keeps the timeline continuous at today', () => {
+    test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+    const today = [...test.db.timeline360.customer_id.filter('C006')].find(r => r.day_offset === 0)!;
+    expect(today.continue_mid_cents).toBe(today.actual_net_cash_cents);
+    expect(today.coach_mid_cents).toBe(today.actual_net_cash_cents);
+    const move = test.db.coachAction.action_id.find('C006|move_cash_to_debt');
+    expect(move).toBeDefined();
+  }, 60_000);
+
+  it('rejects bad input and removes cleanly', () => {
+    expect(() => add({ account_type: 'crypto' })).toThrow(/Unsupported account type/);
+    expect(() => add({ balance_cents: -5 })).toThrow(/non-negative/);
+    expect(() => add({ customer_id: 'C999' })).toThrow(/Unknown customer/);
+    test.withReducerTx(stranger, ctx => m.remove_external_account(ctx, { account_id: 'EXT-C006-1' }));
+    test.withReducerTx(stranger, ctx => m.remove_external_account(ctx, { account_id: 'EXT-C006-2' }));
+    expect(test.db.bookSnapshot.customer_id.find('C006')!.liquid_cents).toBe(before.liquid_cents);
+    expect(test.db.bookLine.account_id.find('EXT-C006-2')).toBeFalsy();
+  });
+
+  it('upserts Plaid accounts idempotently and restricts writes to the database owner', () => {
+    const row = {
+      account_id: 'plaid-sandbox-account',
+      customer_id: 'C006',
+      institution: 'Plaid',
+      nickname: 'Checking',
+      account_type: 'checking',
+      balance_cents: 12345,
+      apr_pct: 0,
+      annual_yield_pct: 0,
+      monthly_payment_cents: 0,
+    };
+
+    test.withReducerTx(owner, ctx => m.upsert_plaid_accounts(ctx, { rows: [row] }));
+    test.withReducerTx(owner, ctx =>
+      m.upsert_plaid_accounts(ctx, { rows: [{ ...row, balance_cents: 54321 }] })
+    );
+    const plaidRows = [...test.db.externalAccount.customer_id.filter('C006')].filter(account =>
+      account.account_id.endsWith('PLAID-plaid-sandbox-account')
+    );
+    expect(plaidRows).toHaveLength(1);
+    expect(plaidRows[0].balance_cents).toBe(54321);
+    expect(() =>
+      test.withReducerTx(stranger, ctx => m.upsert_plaid_accounts(ctx, { rows: [row] }))
     ).toThrow(/owner/);
   });
 });

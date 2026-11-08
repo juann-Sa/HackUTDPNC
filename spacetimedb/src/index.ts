@@ -4,11 +4,17 @@
 // frontend subscribes to (see schema.ts).
 // ─────────────────────────────────────────────────────────────────────────────
 import { t, SenderError, type InferSchema, type ReducerCtx } from 'spacetimedb/server';
-import spacetimedb, { account, customer, financialProjection, ledgerEntry, statement } from './schema';
-import { computeCarry, computeSnapshot, DEBT_TYPES, LIQUID_TYPES } from './math/book';
+import spacetimedb, { account, customer, externalAccount, financialProjection, ledgerEntry, statement } from './schema';
+import { computeCarry, computeSnapshot } from './math/book';
 import { computePnl, computeSpending } from './math/pnl';
-import { computeDailyLiquid } from './math/daily';
+import { computeDailyAccountTotal, computeDailyLiquid } from './math/daily';
 import { dayNumber, isoFromDayNumber } from './math/dates';
+import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR, LIQUID_TYPES } from './math/book';
+import { SHRINK_K, buildSchedule } from './math/schedule';
+import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
+import { RISK_CAP, analyze } from './math/coach';
+import { seedFromString } from './math/rng';
+import { type Fact, SYSTEM_PROMPT, pct, templateText, unverifiedNumbers, usd, userPrompt } from './math/narrate';
 
 export default spacetimedb;
 
@@ -42,22 +48,6 @@ export const load_accounts = spacetimedb.reducer({ rows: t.array(account.rowType
     else ctx.db.account.insert(r);
   }
 });
-
-export const add_external_account = spacetimedb.reducer(
-  { rows: t.array(account.rowType) },
-  (ctx, { rows }) => {
-    assertAdmin(ctx);
-    for (const row of rows) {
-      if (!ctx.db.customer.customer_id.find(row.customer_id))
-        throw new SenderError(`Unknown customer ${row.customer_id}`);
-      const existing = ctx.db.account.account_id.find(row.account_id);
-      if (existing && existing.customer_id !== row.customer_id)
-        throw new SenderError(`Account ${row.account_id} is already linked to another customer`);
-      if (existing) ctx.db.account.account_id.update(row);
-      else ctx.db.account.insert(row);
-    }
-  }
-);
 
 export const load_ledger = spacetimedb.reducer({ rows: t.array(ledgerEntry.rowType) }, (ctx, { rows }) => {
   assertAdmin(ctx);
@@ -93,6 +83,7 @@ export const reset_data = spacetimedb.reducer(ctx => {
   for (const c of [...ctx.db.customer.iter()]) clearResults(ctx, c.customer_id);
   for (const r of [...ctx.db.ledgerEntry.iter()]) ctx.db.ledgerEntry.transaction_id.delete(r.transaction_id);
   for (const r of [...ctx.db.statement.iter()]) ctx.db.statement.statement_id.delete(r.statement_id);
+  for (const r of [...ctx.db.externalAccount.iter()]) ctx.db.externalAccount.account_id.delete(r.account_id);
   for (const r of [...ctx.db.account.iter()]) ctx.db.account.account_id.delete(r.account_id);
   for (const r of [...ctx.db.customer.iter()]) ctx.db.customer.customer_id.delete(r.customer_id);
 });
@@ -118,11 +109,151 @@ function validate(ctx: Ctx, cid: string, stmts: { account_id: string; month: str
   }
 }
 
+// ---------- linked outside accounts ("connect to other banks") ----------
+const EXTERNAL_TYPES = new Set(['checking', 'savings', 'cd', 'ira', 'credit_card', 'auto_loan', 'personal_loan', 'mortgage']);
+const MAX_EXTERNAL = 10;
+
+function externalAccountsOf(ctx: Ctx, cid: string) {
+  return [...ctx.db.externalAccount.customer_id.filter(cid)]
+    .sort((a, b) => (a.account_id < b.account_id ? -1 : 1))
+    .map(x => ({ ...x, opening_balance_cents: x.balance_cents }));
+}
+
+/** Link an account held at another bank; the book recomputes right away. Call run_forecast to refresh the forecast. */
+export const add_external_account = spacetimedb.reducer(
+  {
+    customer_id: t.string(),
+    institution: t.string(),
+    account_type: t.string(),
+    nickname: t.string(),
+    balance_cents: t.f64(),
+    apr_pct: t.f64(),
+    annual_yield_pct: t.f64(),
+    monthly_payment_cents: t.f64(),
+  },
+  (ctx, a) => {
+    if (!ctx.db.customer.customer_id.find(a.customer_id)) throw new SenderError(`Unknown customer ${a.customer_id}`);
+    if (!EXTERNAL_TYPES.has(a.account_type)) throw new SenderError(`Unsupported account type ${a.account_type}`);
+    const institution = a.institution.trim();
+    if (!institution || institution.length > 60) throw new SenderError('Institution name must be 1-60 characters');
+    if (a.nickname.length > 60) throw new SenderError('Nickname must be at most 60 characters');
+    const finite = [a.balance_cents, a.apr_pct, a.annual_yield_pct, a.monthly_payment_cents].every(Number.isFinite);
+    if (!finite || a.balance_cents < 0 || a.monthly_payment_cents < 0) throw new SenderError('Balances and payments must be non-negative numbers');
+    if (a.apr_pct < 0 || a.apr_pct > 100 || a.annual_yield_pct < 0 || a.annual_yield_pct > 100) throw new SenderError('Rates must be between 0 and 100 percent');
+    const existing = [...ctx.db.externalAccount.customer_id.filter(a.customer_id)];
+    if (existing.length >= MAX_EXTERNAL) throw new SenderError(`At most ${MAX_EXTERNAL} linked accounts per customer`);
+    const n = 1 + existing.reduce((m, x) => Math.max(m, Number(x.account_id.split('-').pop()) || 0), 0);
+    ctx.db.externalAccount.insert({
+      account_id: `EXT-${a.customer_id}-${n}`,
+      customer_id: a.customer_id,
+      institution,
+      nickname: a.nickname.trim(),
+      account_type: a.account_type,
+      balance_cents: Math.round(a.balance_cents),
+      apr_pct: a.apr_pct,
+      annual_yield_pct: a.annual_yield_pct,
+      monthly_payment_cents: Math.round(a.monthly_payment_cents),
+      added_at: ctx.timestamp,
+    });
+    recomputeCustomer(ctx, a.customer_id);
+  }
+);
+
+export const upsert_plaid_accounts = spacetimedb.reducer(
+  {
+    rows: t.array(
+      t.object('PlaidAccountInput', {
+        account_id: t.string(),
+        customer_id: t.string(),
+        institution: t.string(),
+        nickname: t.string(),
+        account_type: t.string(),
+        balance_cents: t.f64(),
+        apr_pct: t.f64(),
+        annual_yield_pct: t.f64(),
+        monthly_payment_cents: t.f64(),
+      })
+    ),
+  },
+  (ctx, { rows }) => {
+    assertAdmin(ctx);
+    if (rows.length === 0) throw new SenderError('At least one Plaid account is required');
+    const customerId = rows[0].customer_id;
+    if (rows.some(row => row.customer_id !== customerId))
+      throw new SenderError('All Plaid accounts in a request must belong to one customer');
+    if (!ctx.db.customer.customer_id.find(customerId))
+      throw new SenderError(`Unknown customer ${customerId}`);
+
+    for (const row of rows) {
+      if (!EXTERNAL_TYPES.has(row.account_type)) throw new SenderError(`Unsupported account type ${row.account_type}`);
+      if (
+        !row.account_id ||
+        row.account_id.length > 128 ||
+        !row.institution.trim() ||
+        row.institution.length > 60 ||
+        row.nickname.length > 60 ||
+        ![row.balance_cents, row.apr_pct, row.annual_yield_pct, row.monthly_payment_cents].every(Number.isFinite) ||
+        row.balance_cents < 0 ||
+        row.monthly_payment_cents < 0 ||
+        row.apr_pct < 0 ||
+        row.apr_pct > 100 ||
+        row.annual_yield_pct < 0 ||
+        row.annual_yield_pct > 100
+      )
+        throw new SenderError('Invalid Plaid account data');
+
+      const accountId = `EXT-${customerId}-PLAID-${row.account_id}`;
+      const existing = ctx.db.externalAccount.account_id.find(accountId);
+      if (existing && existing.customer_id !== customerId)
+        throw new SenderError('Plaid account is already linked to another customer');
+      if (existing) {
+        ctx.db.externalAccount.account_id.update({
+          ...existing,
+          institution: row.institution.trim(),
+          nickname: row.nickname.trim(),
+          account_type: row.account_type,
+          balance_cents: Math.round(row.balance_cents),
+          apr_pct: row.apr_pct,
+          annual_yield_pct: row.annual_yield_pct,
+          monthly_payment_cents: Math.round(row.monthly_payment_cents),
+        });
+      } else {
+        const existingAccounts = [...ctx.db.externalAccount.customer_id.filter(customerId)];
+        if (existingAccounts.length >= MAX_EXTERNAL)
+          throw new SenderError(`At most ${MAX_EXTERNAL} linked accounts per customer`);
+        ctx.db.externalAccount.insert({
+          account_id: accountId,
+          customer_id: customerId,
+          institution: row.institution.trim(),
+          nickname: row.nickname.trim(),
+          account_type: row.account_type,
+          balance_cents: Math.round(row.balance_cents),
+          apr_pct: row.apr_pct,
+          annual_yield_pct: row.annual_yield_pct,
+          monthly_payment_cents: Math.round(row.monthly_payment_cents),
+          added_at: ctx.timestamp,
+        });
+      }
+    }
+
+    recomputeCustomer(ctx, customerId);
+  }
+);
+
+export const remove_external_account = spacetimedb.reducer({ account_id: t.string() }, (ctx, { account_id }) => {
+  const x = ctx.db.externalAccount.account_id.find(account_id);
+  if (!x) throw new SenderError(`Unknown linked account ${account_id}`);
+  ctx.db.externalAccount.account_id.delete(account_id);
+  recomputeCustomer(ctx, x.customer_id);
+});
+
 // ---------- recompute ----------
 function recomputeCustomer(ctx: Ctx, cid: string) {
   const prof = ctx.db.customer.customer_id.find(cid);
   if (!prof) throw new SenderError(`Unknown customer ${cid}`);
   const accts = [...ctx.db.account.customer_id.filter(cid)].sort((a, b) => (a.account_id < b.account_id ? -1 : 1));
+  const external = externalAccountsOf(ctx, cid);
+  const allAccts = [...accts, ...external];
   const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
   const stmts = [...ctx.db.statement.customer_id.filter(cid)];
   clearResults(ctx, cid);
@@ -135,11 +266,11 @@ function recomputeCustomer(ctx: Ctx, cid: string) {
   const [ly, lm] = lastMonth.split('-').map(Number);
   const nextMonthStart = lastMonth ? `${lm === 12 ? ly + 1 : ly}-${String(lm === 12 ? 1 : lm + 1).padStart(2, '0')}-01` : '';
   const asOf = lastMonth ? isoFromDayNumber(dayNumber(nextMonthStart) - 1) : '';
-  const snap = computeSnapshot(prof, accts);
+  const snap = computeSnapshot(prof, allAccts);
   ctx.db.bookSnapshot.insert({ customer_id: cid, as_of: asOf, ...snap });
 
   // §2 carry
-  const carry = computeCarry(accts, snap.liquid_cents, snap.monthly_outflow_cents);
+  const carry = computeCarry(allAccts, snap.liquid_cents, snap.monthly_outflow_cents);
   for (const l of carry.lines) ctx.db.bookLine.insert({ customer_id: cid, ...l, annual_carry_cents: round(l.annual_carry_cents) });
   const s = carry.summary;
   ctx.db.carrySummary.insert({
@@ -187,23 +318,23 @@ export const generate_180_day_projection = spacetimedb.reducer(
     const profile = ctx.db.customer.customer_id.find(customer_id);
     if (!profile) throw new SenderError(`Unknown customer ${customer_id}`);
 
-    const accounts = [...ctx.db.account.customer_id.filter(customer_id)];
-    const liquidAccounts = accounts.filter(a => LIQUID_TYPES.has(a.account_type));
-    const debtAccounts = accounts.filter(a => DEBT_TYPES.has(a.account_type));
-    const currentLiquidCash = liquidAccounts.reduce((total, a) => total + a.balance_cents, 0);
-    const currentTotalDebt = debtAccounts.reduce((total, a) => total + a.balance_cents, 0);
-    let liquidBalance = currentLiquidCash;
-    let debtBalance = currentTotalDebt;
-    const minimumMonthlyPayments = debtAccounts.reduce((total, a) => total + a.monthly_payment_cents, 0);
+    const accounts = [
+      ...ctx.db.account.customer_id.filter(customer_id),
+      ...ctx.db.externalAccount.customer_id.filter(customer_id),
+    ];
+    const liquidAccounts = accounts.filter(account => LIQUID_TYPES.has(account.account_type));
+    const debtAccounts = accounts.filter(account => DEBT_TYPES.has(account.account_type));
+    const currentLiquidCash = liquidAccounts.reduce((total, account) => total + account.balance_cents, 0);
+    const currentTotalDebt = debtAccounts.reduce((total, account) => total + account.balance_cents, 0);
+    const minimumMonthlyPayments = debtAccounts.reduce((total, account) => total + account.monthly_payment_cents, 0);
 
-    const monthlyStatements = [...ctx.db.statement.customer_id.filter(customer_id)];
-    if (monthlyStatements.length === 0)
-      throw new SenderError(`No monthly statements found for customer ${customer_id}`);
-    const latestMonth = monthlyStatements.reduce(
+    const statements = [...ctx.db.statement.customer_id.filter(customer_id)];
+    if (statements.length === 0) throw new SenderError(`No monthly statements found for customer ${customer_id}`);
+    const latestMonth = statements.reduce(
       (latest, row) => (row.month > latest ? row.month : latest),
-      monthlyStatements[0].month
+      statements[0].month
     );
-    const historyMonths = [...new Set(monthlyStatements.map(row => row.month))]
+    const historyMonths = [...new Set(statements.map(row => row.month))]
       .sort()
       .slice(-6);
 
@@ -211,13 +342,7 @@ export const generate_180_day_projection = spacetimedb.reducer(
       ctx.db.financialProjection.projection_id.delete(row.projection_id);
 
     for (const month of historyMonths) {
-      const monthStatements = monthlyStatements.filter(row => row.month === month);
-      const historicalLiquid = monthStatements
-        .filter(row => LIQUID_TYPES.has(row.account_type))
-        .reduce((total, row) => total + row.closing_cents, 0);
-      const historicalDebt = monthStatements
-        .filter(row => DEBT_TYPES.has(row.account_type))
-        .reduce((total, row) => total + row.closing_cents, 0);
+      const monthStatements = statements.filter(row => row.month === month);
       ctx.db.financialProjection.insert({
         projection_id: `${customer_id}|historical|${month}`,
         customer_id,
@@ -226,8 +351,12 @@ export const generate_180_day_projection = spacetimedb.reducer(
         current_liquid_cash_cents: currentLiquidCash,
         current_total_debt_cents: currentTotalDebt,
         total_minimum_monthly_payments_cents: minimumMonthlyPayments,
-        liquid_balance_cents: historicalLiquid,
-        debt_balance_cents: historicalDebt,
+        liquid_balance_cents: monthStatements
+          .filter(row => LIQUID_TYPES.has(row.account_type))
+          .reduce((total, row) => total + row.closing_cents, 0),
+        debt_balance_cents: monthStatements
+          .filter(row => DEBT_TYPES.has(row.account_type))
+          .reduce((total, row) => total + row.closing_cents, 0),
         monthly_income_cents: undefined,
         monthly_expenses_cents: undefined,
         monthly_debt_payments_cents: undefined,
@@ -235,8 +364,9 @@ export const generate_180_day_projection = spacetimedb.reducer(
       });
     }
 
-    // This deterministic baseline applies minimum payments to principal; it does not model interest or new charges.
     const [startYear, startMonth] = latestMonth.split('-').map(Number);
+    let liquidBalance = currentLiquidCash;
+    let debtBalance = currentTotalDebt;
     for (let offset = 1; offset <= 6; offset++) {
       const monthIndex = startMonth - 1 + offset;
       const year = startYear + Math.floor(monthIndex / 12);
@@ -249,6 +379,7 @@ export const generate_180_day_projection = spacetimedb.reducer(
       const debtPayment = Math.min(minimumMonthlyPayments, debtBalance);
       liquidBalance += profile.monthly_income_cents - monthlyExpenses - debtPayment;
       debtBalance -= debtPayment;
+
       ctx.db.financialProjection.insert({
         projection_id: `${customer_id}|projected|${month}`,
         customer_id,
@@ -265,5 +396,359 @@ export const generate_180_day_projection = spacetimedb.reducer(
         holiday_expense_spike: holidayExpenseSpike,
       });
     }
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Forecast (spec §4–§9): 180-day Monte Carlo, stress tests, sensitivities, coach.
+// ─────────────────────────────────────────────────────────────────────────────
+function scheduleFor(ctx: Ctx, cid: string) {
+  const prof = ctx.db.customer.customer_id.find(cid);
+  if (!prof) throw new SenderError(`Unknown customer ${cid}`);
+  const accts = [...ctx.db.account.customer_id.filter(cid)].sort((a, b) => (a.account_id < b.account_id ? -1 : 1));
+  const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
+  if (!ledger.length) throw new SenderError(`No ledger for ${cid}`);
+  const asOf = ledger.reduce((m, t) => (t.posted_date > m ? t.posted_date : m), '');
+  const external = externalAccountsOf(ctx, cid);
+  const snap = computeSnapshot(prof, [...accts, ...external]);
+  return { schedule: buildSchedule(ledger, accts, asOf, DEFAULT_ASSUMPTIONS.horizonDays, external), snap };
+}
+
+function clearScenario(ctx: Ctx, cid: string, scenario: string) {
+  for (const r of [...ctx.db.forecastBand.customer_id.filter(cid)])
+    if (r.scenario === scenario) ctx.db.forecastBand.band_id.delete(r.band_id);
+  for (const r of [...ctx.db.riskSource.customer_id.filter(cid)])
+    if (r.scenario === scenario) ctx.db.riskSource.risk_id.delete(r.risk_id);
+  const run = ctx.db.forecastRun.run_id.find(`${cid}|${scenario}`);
+  if (run) ctx.db.forecastRun.run_id.delete(run.run_id);
+}
+
+function writeForecast(ctx: Ctx, cid: string, f: ForecastResult, a: Assumptions) {
+  const scenario = f.scenario.id;
+  clearScenario(ctx, cid, scenario);
+  ctx.db.forecastRun.insert({
+    run_id: `${cid}|${scenario}`,
+    customer_id: cid,
+    scenario,
+    label: f.scenario.label,
+    include_external: f.scenario.includeExternal,
+    paths: 2 * a.pairs,
+    horizon_days: a.horizonDays,
+    start_date: f.dates[0],
+    threshold_cents: a.thresholdCents,
+    p_low: f.pLow,
+    p_low_se: f.pLowSe,
+    var95_cents: round(f.var95),
+    es95_cents: round(f.es95),
+    mdd_p50_cents: round(f.mddP50),
+    mdd_p95_cents: round(f.mddP95),
+    end_liquid_p5_cents: round(f.endLiquid.p5),
+    end_liquid_p50_cents: round(f.endLiquid.p50),
+    end_liquid_p95_cents: round(f.endLiquid.p95),
+    end_net_worth_p5_cents: round(f.endNetWorth.p5),
+    end_net_worth_p50_cents: round(f.endNetWorth.p50),
+    end_net_worth_p95_cents: round(f.endNetWorth.p95),
+    planned_change_cents: round(f.deterministicChange),
+  });
+  f.bands.forEach((b, i) =>
+    ctx.db.forecastBand.insert({
+      band_id: `${cid}|${scenario}|${i}`,
+      customer_id: cid,
+      scenario,
+      day_index: i,
+      date: f.dates[i],
+      p5_cents: round(b.p5),
+      p25_cents: round(b.p25),
+      p50_cents: round(b.p50),
+      p75_cents: round(b.p75),
+      p95_cents: round(b.p95),
+    })
+  );
+  for (const src of f.sources)
+    ctx.db.riskSource.insert({
+      risk_id: `${cid}|${scenario}|${src.source}`,
+      customer_id: cid,
+      scenario,
+      source: src.source,
+      var_share: src.varShare,
+      es_contribution_cents: round(src.esContribution),
+    });
+}
+
+const PAST_DAYS = 180;
+
+function writeTimeline(ctx: Ctx, cid: string, cont: ForecastResult, coach: ForecastResult) {
+  for (const r of [...ctx.db.timeline360.customer_id.filter(cid)]) ctx.db.timeline360.timeline_id.delete(r.timeline_id);
+  const asOfDn = dayNumber(cont.dates[0]);
+  const start = isoFromDayNumber(asOfDn - PAST_DAYS);
+  const accts = [...ctx.db.account.customer_id.filter(cid)];
+  const highCost = new Set(
+    accts.filter(a => DEBT_TYPES.has(a.account_type) && a.apr_pct >= HIGH_COST_APR).map(a => a.account_id)
+  );
+  const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
+  const firstDate = ledger.reduce((m, t) => (t.posted_date < m ? t.posted_date : m), cont.dates[0]);
+  const debt = computeDailyAccountTotal(ledger, accts, highCost, firstDate, cont.dates[0]);
+  const liquid = new Map<string, number>();
+  for (const d of ctx.db.dailyLiquid.customer_id.filter(cid)) liquid.set(d.date, d.liquid_cents);
+  // Linked outside accounts have no history here: shown flat at today's balance.
+  const ext = externalAccountsOf(ctx, cid);
+  const extLiquid = ext.filter(a => a.account_type === 'checking' || a.account_type === 'savings').reduce((s, a) => s + a.balance_cents, 0);
+  const extHighCost = ext.filter(a => DEBT_TYPES.has(a.account_type) && a.apr_pct >= HIGH_COST_APR).reduce((s, a) => s + a.balance_cents, 0);
+  for (let off = -PAST_DAYS; off <= cont.bands.length - 1; off++) {
+    const date = isoFromDayNumber(asOfDn + off);
+    const bankPast = off <= 0 && date >= start ? liquid.get(date) : undefined;
+    const past = bankPast !== undefined ? bankPast + extLiquid : undefined;
+    const c = off >= 0 ? cont.netCashBands[off] : undefined;
+    const k = off >= 0 ? coach.netCashBands[off] : undefined;
+    ctx.db.timeline360.insert({
+      timeline_id: `${cid}|${off}`,
+      customer_id: cid,
+      day_offset: off,
+      date,
+      actual_net_cash_cents: past !== undefined ? round(past - (debt.get(date) ?? 0) - extHighCost) : undefined,
+      actual_liquid_cents: past,
+      continue_low_cents: c ? round(c.p5) : undefined,
+      continue_mid_cents: c ? round(c.p50) : undefined,
+      continue_high_cents: c ? round(c.p95) : undefined,
+      coach_low_cents: k ? round(k.p5) : undefined,
+      coach_mid_cents: k ? round(k.p50) : undefined,
+      coach_high_cents: k ? round(k.p95) : undefined,
+    });
+  }
+}
+
+/** Full forward analysis for one customer: baseline, coach path, stresses, sensitivities, frontier. */
+export const run_forecast = spacetimedb.reducer(
+  { customer_id: t.string(), include_external: t.bool() },
+  (ctx, { customer_id: cid, include_external }) => {
+    const { schedule, snap } = scheduleFor(ctx, cid);
+    const a = DEFAULT_ASSUMPTIONS;
+    const seed = seedFromString(cid);
+    const an = analyze(schedule, a, seed, include_external, snap.monthly_outflow_cents);
+    for (const f of [an.baseline, an.coach, ...an.stresses]) writeForecast(ctx, cid, f, a);
+
+    // Habit view: the two lines on the 360° chart, same random draws, life events off.
+    const h = habitAssumptions(a);
+    const tapes = makeTapes(seed, h, schedule.months.length + 1);
+    const habitContinue = runForecast(schedule, h, { ...an.baseline.scenario, id: 'habit_continue', label: 'If you continue like this' }, tapes);
+    const habitCoach = runForecast(schedule, h, { ...an.coach.scenario, id: 'habit_coach', label: 'If you follow the coach' }, tapes);
+    writeForecast(ctx, cid, habitContinue, h);
+    writeForecast(ctx, cid, habitCoach, h);
+    writeTimeline(ctx, cid, habitContinue, habitCoach);
+
+    for (const r of [...ctx.db.sensitivity.customer_id.filter(cid)]) ctx.db.sensitivity.sensitivity_id.delete(r.sensitivity_id);
+    for (const r of an.sensitivities)
+      ctx.db.sensitivity.insert({
+        sensitivity_id: `${cid}|${r.lever}`, customer_id: cid, lever: r.lever, label: r.label,
+        delta_p_low: r.deltaPLow, delta_end_p50_cents: round(r.deltaEndP50),
+      });
+    for (const r of [...ctx.db.frontierPoint.customer_id.filter(cid)]) ctx.db.frontierPoint.frontier_id.delete(r.frontier_id);
+    an.frontier.forEach((p, i) =>
+      ctx.db.frontierPoint.insert({
+        frontier_id: `${cid}|${i}`, customer_id: cid, move_cents: p.moveCents, p_low: p.pLow,
+        annual_saving_cents: round(p.annualSavingCents), recommended: p.recommended,
+      })
+    );
+    for (const r of [...ctx.db.coachAction.customer_id.filter(cid)]) ctx.db.coachAction.action_id.delete(r.action_id);
+    for (const x of an.actions)
+      ctx.db.coachAction.insert({
+        action_id: `${cid}|${x.kind}`, customer_id: cid, kind: x.kind, amount_cents: x.amountCents, fraction: x.fraction,
+        annual_saving_cents: round(x.annualSavingCents), p_low_before: x.pLowBefore, p_low_after: x.pLowAfter, detail: x.detail,
+      });
+    const existing = ctx.db.forecastAssumption.customer_id.find(cid);
+    if (existing) ctx.db.forecastAssumption.customer_id.delete(cid);
+    ctx.db.forecastAssumption.insert({
+      customer_id: cid,
+      sigma_shared: schedule.sigmaShared,
+      sigma_idio: schedule.sigmaIdio,
+      phi: schedule.phi,
+      income_sigma: schedule.incomeSigma,
+      shrink_k: SHRINK_K,
+      student_t_nu: a.nu,
+      jumps_per_year: a.jumpsPerYear,
+      jump_median_cents: a.jumpMedianCents,
+      p_job_loss_monthly: a.pEmployedToJobLoss,
+      p_rehire_monthly: a.pJobLossToEmployed,
+      ira_mu: a.iraMu,
+      ira_sigma: a.iraSigma,
+      risk_cap: RISK_CAP,
+      buffer_months: BUFFER_MONTHS,
+      seed,
+    });
+  }
+);
+
+const CategoryMult = t.object('CategoryMult', { category: t.string(), mult: t.f64() });
+
+/** What-if simulator: one custom scenario on the same random draws as the baseline (shared live). */
+export const run_what_if = spacetimedb.reducer(
+  {
+    customer_id: t.string(),
+    include_external: t.bool(),
+    income_mult: t.f64(),
+    category_mults: t.array(CategoryMult),
+    one_off_cents: t.f64(),
+    one_off_day: t.u32(),
+    move_to_debt_cents: t.f64(),
+    job_loss_months: t.u32(),
+    card_apr_bump_pct: t.f64(),
+  },
+  (ctx, args) => {
+    const { schedule } = scheduleFor(ctx, args.customer_id);
+    const a = DEFAULT_ASSUMPTIONS;
+    const tapes = makeTapes(seedFromString(args.customer_id), a, schedule.months.length + 1);
+    const sc: Scenario = {
+      id: 'what_if',
+      label: 'What if',
+      includeExternal: args.include_external,
+      incomeMult: args.income_mult,
+      categoryMult: Object.fromEntries(args.category_mults.map(c => [c.category, c.mult])),
+      oneOff: args.one_off_cents > 0 ? { dayIndex: Math.min(args.one_off_day, a.horizonDays - 1), cents: args.one_off_cents } : undefined,
+      moveToDebtCents: args.move_to_debt_cents,
+      jobLossMonths: args.job_loss_months,
+      cardAprBumpPct: args.card_apr_bump_pct,
+    };
+    writeForecast(ctx, args.customer_id, runForecast(schedule, a, sc, tapes), a);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI narration: Groq explains stored numbers; it never computes them.
+// ─────────────────────────────────────────────────────────────────────────────
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const DEFAULT_MODEL = 'openai/gpt-oss-120b';
+
+function gatherFacts(ctx: Ctx, cid: string): Fact[] {
+  const f: Fact[] = [];
+  const add = (key: string, text: string) => f.push({ key, text });
+  const snap = ctx.db.bookSnapshot.customer_id.find(cid);
+  if (!snap) throw new SenderError(`No results for ${cid}; run recompute_customer first`);
+  add('net_worth', `Net worth (excluding home value): ${usd(snap.net_worth_cents)}`);
+  add('cash', `Cash in checking and savings: ${usd(snap.liquid_cents)}`);
+  if (snap.runway_months !== undefined) add('runway', `Months of essential bills cash would cover: ${snap.runway_months.toFixed(1)}`);
+  if (snap.debt_to_income !== undefined) add('dti', `Share of income going to debt payments: ${pct(snap.debt_to_income, 0)}`);
+  if (snap.utilization !== undefined) add('utilization', `Credit card utilization: ${pct(snap.utilization, 0)}`);
+
+  const carry = ctx.db.carrySummary.customer_id.find(cid);
+  if (carry) {
+    add('carry', `Yearly interest earned on savings: ${usd(carry.earn_cents)}; yearly interest paid on debt: ${usd(carry.cost_cents)}`);
+    if (carry.fixable_leak_cents > 0) add('fixable_leak', `Interest that could be saved each year by using spare cash on expensive debt: ${usd(carry.fixable_leak_cents)}`);
+  }
+
+  const pnl = [...ctx.db.pnlMonth.customer_id.filter(cid)].sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-6);
+  if (pnl.length) {
+    const s = (k: keyof (typeof pnl)[number]) => pnl.reduce((p, r) => p + (r[k] as number), 0);
+    add('income_6m', `Paychecks over the last 6 months: ${usd(s('income_cents'))}`);
+    add('spending_6m', `Spending over the last 6 months: ${usd(s('spending_cents'))}`);
+    add('debt_interest_6m', `Debt interest over the last 6 months: ${usd(s('debt_interest_cents'))}`);
+    const ext = s('ext_in_cents') - s('ext_out_cents');
+    if (Math.abs(ext) > 10_000) add('external_6m', `Money moved in from accounts outside this bank over the last 6 months: ${usd(ext)}`);
+    add('organic_6m', `Change in net worth from your own earning and spending over the last 6 months: ${usd(s('organic_cents'))}`);
+  }
+
+  const tl = [...ctx.db.timeline360.customer_id.filter(cid)];
+  const today = tl.find(r => r.day_offset === 0);
+  const end = tl.reduce<(typeof tl)[number] | undefined>((m, r) => (!m || r.day_offset > m.day_offset ? r : m), undefined);
+  if (today?.actual_net_cash_cents !== undefined) add('net_cash_today', `Net cash today (cash minus high-interest debt): ${usd(today.actual_net_cash_cents)}`);
+  if (end?.continue_mid_cents !== undefined && end.continue_low_cents !== undefined && end.continue_high_cents !== undefined) {
+    add('continue_180', `Net cash in 180 days if you continue as you are: about ${usd(end.continue_mid_cents)} (likely between ${usd(end.continue_low_cents)} and ${usd(end.continue_high_cents)})`);
+    const band = (end.continue_high_cents - end.continue_low_cents) / 2;
+    if (today?.actual_liquid_cents) add('band_note', `Forecast margin for normal ups and downs: plus or minus ${usd(band)}, about ${pct(band / today.actual_liquid_cents)} of your cash`);
+  }
+  if (end?.coach_mid_cents !== undefined) {
+    add('coach_180', `Net cash in 180 days if you follow the coach: about ${usd(end.coach_mid_cents)}`);
+    if (end.continue_mid_cents !== undefined) add('coach_gain', `Difference from following the coach after 180 days: ${usd(end.coach_mid_cents - end.continue_mid_cents)}`);
+  }
+  const base = ctx.db.forecastRun.run_id.find(`${cid}|baseline`);
+  if (base) add('p_low', `Chance cash drops below ${usd(base.threshold_cents)} in the next 180 days (including surprises): ${pct(base.p_low)}`);
+  const job = ctx.db.forecastRun.run_id.find(`${cid}|stress_job_loss`);
+  if (job) add('stress_job_loss', `That chance if income stopped for 3 months: ${pct(job.p_low)}`);
+  const bill = ctx.db.forecastRun.run_id.find(`${cid}|stress_bill`);
+  if (bill) add('stress_bill', `That chance after a surprise $3,000 bill: ${pct(bill.p_low)}`);
+  for (const a of ctx.db.coachAction.customer_id.filter(cid)) {
+    if (a.kind === 'move_cash_to_debt')
+      add('action_move', `Coach suggestion: move ${usd(a.amount_cents)} of spare cash to your highest-interest debt, saving about ${usd(a.annual_saving_cents)} a year; chance of running low goes from ${pct(a.p_low_before)} to ${pct(a.p_low_after)}`);
+    else
+      add('action_trim', `Coach suggestion: trim dining, shopping and other extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month, ${usd(a.annual_saving_cents)} a year)`);
+  }
+  return f;
+}
+
+const TOPICS = new Set(['overview', 'past', 'future', 'coach', 'risk']);
+
+/** Explain a customer's numbers in plain language. Falls back to a template if the AI reply fails the number check. */
+export const narrate = spacetimedb.procedure(
+  { customer_id: t.string(), topic: t.string() },
+  t.string(),
+  (ctx, { customer_id: cid, topic }) => {
+    // Procedures report thrown errors as fatal (HTTP 500), so problems come back as readable text.
+    if (!TOPICS.has(topic)) return `Unknown topic "${topic}". Use one of: ${[...TOPICS].join(', ')}.`;
+    let facts: Fact[];
+    try {
+      facts = ctx.withTx(tx => gatherFacts(tx, cid));
+    } catch (e) {
+      return `No results for ${cid} yet. Load the data and call recompute_customer (and run_forecast) first.`;
+    }
+    const env = (k: 'GROQ_API_KEY' | 'GROQ_MODEL') => {
+      try {
+        return ctx.env.get(k) ?? null;
+      } catch {
+        return null; // environment unavailable (e.g. unit tests): fall back to the template
+      }
+    };
+    const key = env('GROQ_API_KEY');
+    const model = env('GROQ_MODEL') || DEFAULT_MODEL;
+    let text = templateText(topic, facts);
+    let source = 'template';
+    let rejected = key ? '' : 'no GROQ_API_KEY set';
+    if (key) {
+      // Up to two attempts: if the first reply uses numbers we can't verify, say which and ask again.
+      const messages: { role: string; content: string }[] = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: userPrompt(topic, facts) },
+      ];
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const res = ctx.http.fetch(GROQ_URL, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model, temperature: 0.2, max_completion_tokens: 700, reasoning_effort: 'low', messages }),
+          });
+          if (res.status !== 200) {
+            rejected = `groq http ${res.status}`;
+            break;
+          }
+          const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
+          const bad = unverifiedNumbers(out, facts);
+          if (!out) rejected = 'empty reply';
+          else if (bad.length) {
+            rejected = `unverified numbers (attempt ${attempt + 1}): ${bad.slice(0, 5).join(', ')}`;
+            messages.push({ role: 'assistant', content: out });
+            messages.push({
+              role: 'user',
+              content: `These numbers are not in the facts: ${bad.join(', ')}. Rewrite the answer using only numbers copied exactly from the facts.`,
+            });
+            continue;
+          } else {
+            text = out;
+            source = 'groq';
+            rejected = attempt ? `fixed on retry (${rejected})` : '';
+          }
+          break;
+        } catch (e) {
+          rejected = `groq error: ${String(e).slice(0, 200)}`;
+          break;
+        }
+      }
+    }
+    ctx.withTx(tx => {
+      const id = `${cid}|${topic}`;
+      if (tx.db.narration.narration_id.find(id)) tx.db.narration.narration_id.delete(id);
+      tx.db.narration.insert({
+        narration_id: id, customer_id: cid, topic, text, source,
+        model: source === 'groq' ? model : 'template', rejected_reason: rejected, created_at: tx.timestamp,
+      });
+    });
+    return text;
   }
 );

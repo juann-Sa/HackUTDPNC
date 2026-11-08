@@ -8,8 +8,12 @@ import {
   t as __t,
   type AlgebraicTypeType as __AlgebraicTypeType,
   type Infer as __Infer,
-} from 'spacetimedb';
+} from "spacetimedb";
+
+import { Customer } from "./types";
 
 export default {
-  text: __t.string(),
+  get rows() {
+    return __t.array(Customer);
+  },
 };

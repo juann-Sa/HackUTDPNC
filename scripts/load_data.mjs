@@ -5,6 +5,7 @@
 //   node scripts/load_data.mjs                       # local server, database from spacetime.json
 //   node scripts/load_data.mjs --server maincloud     # Maincloud
 //   node scripts/load_data.mjs --db spacetime360 --only C006,C002
+//   node scripts/load_data.mjs --forecast C006,C002,C055      # customers to run the 180-day forecast for
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -19,6 +20,7 @@ const cfg = JSON.parse(readFileSync(join(ROOT, 'spacetime.json'), 'utf8'));
 const SERVER = arg('server', cfg.server ?? 'local');
 const DB = arg('db', cfg.database);
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
+const FORECAST = arg('forecast', 'C006,C002').split(',').filter(Boolean);
 
 function csv(name) {
   const [head, ...lines] = readFileSync(join(ROOT, 'data', name), 'utf8').trim().split(/\r?\n/);
@@ -94,6 +96,12 @@ batched('load_ledger', csv('transactions.csv').map(r => ({
 })), 600);
 customers.forEach((c, i) => {
   call('recompute_customer', c.customer_id);
+  call('generate_180_day_projection', c.customer_id);
   process.stdout.write(`\r  recompute_customer: ${i + 1}/${customers.length}`);
 });
-process.stdout.write('\nDone. Check: spacetime sql ' + DB + ' "SELECT * FROM validation_issue" --server ' + SERVER + '\n');
+process.stdout.write('\n');
+for (const cid of FORECAST.filter(c => !ONLY || ONLY.has(c))) {
+  call('run_forecast', cid, false);
+  console.log(`  run_forecast: ${cid}`);
+}
+process.stdout.write('Done. Check: spacetime sql ' + DB + ' "SELECT * FROM validation_issue" --server ' + SERVER + '\n');
