@@ -137,6 +137,23 @@ export const ExternalAccount = __t.object("ExternalAccount", {
 });
 export type ExternalAccount = __Infer<typeof ExternalAccount>;
 
+export const FinancialProjection = __t.object("FinancialProjection", {
+  projectionId: __t.string(),
+  customerId: __t.string(),
+  month: __t.string(),
+  recordType: __t.string(),
+  currentLiquidCashCents: __t.f64(),
+  currentTotalDebtCents: __t.f64(),
+  totalMinimumMonthlyPaymentsCents: __t.f64(),
+  liquidBalanceCents: __t.f64(),
+  debtBalanceCents: __t.f64(),
+  monthlyIncomeCents: __t.option(__t.f64()),
+  monthlyExpensesCents: __t.option(__t.f64()),
+  monthlyDebtPaymentsCents: __t.option(__t.f64()),
+  holidayExpenseSpike: __t.bool(),
+});
+export type FinancialProjection = __Infer<typeof FinancialProjection>;
+
 export const ForecastAssumption = __t.object("ForecastAssumption", {
   customerId: __t.string(),
   sigmaShared: __t.f64(),
@@ -236,6 +253,19 @@ export const Narration = __t.object("Narration", {
 });
 export type Narration = __Infer<typeof Narration>;
 
+export const PlaidAccountInput = __t.object("PlaidAccountInput", {
+  accountId: __t.string(),
+  customerId: __t.string(),
+  institution: __t.string(),
+  nickname: __t.string(),
+  accountType: __t.string(),
+  balanceCents: __t.f64(),
+  aprPct: __t.f64(),
+  annualYieldPct: __t.f64(),
+  monthlyPaymentCents: __t.f64(),
+});
+export type PlaidAccountInput = __Infer<typeof PlaidAccountInput>;
+
 export const PnlMonth = __t.object("PnlMonth", {
   pnlId: __t.string(),
   customerId: __t.string(),
@@ -319,4 +349,3 @@ export const ValidationIssue = __t.object("ValidationIssue", {
   detail: __t.string(),
 });
 export type ValidationIssue = __Infer<typeof ValidationIssue>;
-

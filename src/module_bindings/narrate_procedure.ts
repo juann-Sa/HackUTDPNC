@@ -14,4 +14,4 @@ export const params = {
   customerId: __t.string(),
   topic: __t.string(),
 };
-export const returnType = __t.string()
+export const returnType = __t.string();

@@ -98,6 +98,7 @@ batched('load_ledger', csv('transactions.csv').map(r => ({
 })), 600);
 customers.forEach((c, i) => {
   call('recompute_customer', c.customer_id);
+  call('generate_180_day_projection', c.customer_id);
   process.stdout.write(`\r  recompute_customer: ${i + 1}/${customers.length}`);
 });
 process.stdout.write('\n');

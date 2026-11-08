@@ -70,6 +70,25 @@ export const statement = table(
   }
 );
 
+export const financialProjection = table(
+  { name: 'financial_projection', public: true },
+  {
+    projection_id: t.string().primaryKey(), // customer_id|record_type|YYYY-MM
+    customer_id: t.string().index('btree'),
+    month: t.string(),
+    record_type: t.string(), // historical | projected
+    current_liquid_cash_cents: t.f64(),
+    current_total_debt_cents: t.f64(),
+    total_minimum_monthly_payments_cents: t.f64(),
+    liquid_balance_cents: t.f64(),
+    debt_balance_cents: t.f64(),
+    monthly_income_cents: t.option(t.f64()),
+    monthly_expenses_cents: t.option(t.f64()),
+    monthly_debt_payments_cents: t.option(t.f64()),
+    holiday_expense_spike: t.bool(),
+  }
+);
+
 /**
  * Accounts at other banks the customer links by hand ("connect to other banks").
  * Kept apart from `account` because they have no ledger here; they join the book snapshot,
@@ -543,6 +562,7 @@ const spacetimedb = schema({
   account,
   ledgerEntry,
   statement,
+  financialProjection,
   externalAccount,
   bookSnapshot,
   bookLine,

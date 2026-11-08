@@ -10,9 +10,7 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  CategoryMult,
-} from "./types";
+import { CategoryMult } from "./types";
 
 export default {
   customerId: __t.string(),

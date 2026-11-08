@@ -10,9 +10,7 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
-import {
-  Customer,
-} from "./types";
+import { Customer } from "./types";
 
 export default {
   get rows() {

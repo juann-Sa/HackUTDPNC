@@ -4,12 +4,12 @@
 // frontend subscribes to (see schema.ts).
 // ─────────────────────────────────────────────────────────────────────────────
 import { t, SenderError, type InferSchema, type ProcedureCtx, type ReducerCtx } from 'spacetimedb/server';
-import spacetimedb, { account, customer, ledgerEntry, statement } from './schema';
+import spacetimedb, { account, customer, externalAccount, financialProjection, ledgerEntry, statement } from './schema';
 import { computeCarry, computeSnapshot } from './math/book';
 import { computePnl, computeSpending } from './math/pnl';
 import { computeDailyAccountTotal, computeDailyLiquid } from './math/daily';
 import { dayNumber, isoFromDayNumber } from './math/dates';
-import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR } from './math/book';
+import { BUFFER_MONTHS, DEBT_TYPES, HIGH_COST_APR, LIQUID_TYPES } from './math/book';
 import { SHRINK_K, buildSchedule } from './math/schedule';
 import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
 import { RISK_CAP, analyze, sourceLabel } from './math/coach';
@@ -70,6 +70,8 @@ export const load_statements = spacetimedb.reducer({ rows: t.array(statement.row
 });
 
 function clearResults(ctx: Ctx, cid: string) {
+  for (const r of [...ctx.db.financialProjection.customer_id.filter(cid)])
+    ctx.db.financialProjection.projection_id.delete(r.projection_id);
   if (ctx.db.bookSnapshot.customer_id.find(cid)) ctx.db.bookSnapshot.customer_id.delete(cid);
   if (ctx.db.carrySummary.customer_id.find(cid)) ctx.db.carrySummary.customer_id.delete(cid);
   for (const r of [...ctx.db.bookLine.customer_id.filter(cid)]) ctx.db.bookLine.account_id.delete(r.account_id);
@@ -161,6 +163,87 @@ export const add_external_account = spacetimedb.reducer(
   }
 );
 
+export const upsert_plaid_accounts = spacetimedb.reducer(
+  {
+    rows: t.array(
+      t.object('PlaidAccountInput', {
+        account_id: t.string(),
+        customer_id: t.string(),
+        institution: t.string(),
+        nickname: t.string(),
+        account_type: t.string(),
+        balance_cents: t.f64(),
+        apr_pct: t.f64(),
+        annual_yield_pct: t.f64(),
+        monthly_payment_cents: t.f64(),
+      })
+    ),
+  },
+  (ctx, { rows }) => {
+    assertAdmin(ctx);
+    if (rows.length === 0) throw new SenderError('At least one Plaid account is required');
+    const customerId = rows[0].customer_id;
+    if (rows.some(row => row.customer_id !== customerId))
+      throw new SenderError('All Plaid accounts in a request must belong to one customer');
+    if (!ctx.db.customer.customer_id.find(customerId))
+      throw new SenderError(`Unknown customer ${customerId}`);
+
+    for (const row of rows) {
+      if (!EXTERNAL_TYPES.has(row.account_type)) throw new SenderError(`Unsupported account type ${row.account_type}`);
+      if (
+        !row.account_id ||
+        row.account_id.length > 128 ||
+        !row.institution.trim() ||
+        row.institution.length > 60 ||
+        row.nickname.length > 60 ||
+        ![row.balance_cents, row.apr_pct, row.annual_yield_pct, row.monthly_payment_cents].every(Number.isFinite) ||
+        row.balance_cents < 0 ||
+        row.monthly_payment_cents < 0 ||
+        row.apr_pct < 0 ||
+        row.apr_pct > 100 ||
+        row.annual_yield_pct < 0 ||
+        row.annual_yield_pct > 100
+      )
+        throw new SenderError('Invalid Plaid account data');
+
+      const accountId = `EXT-${customerId}-PLAID-${row.account_id}`;
+      const existing = ctx.db.externalAccount.account_id.find(accountId);
+      if (existing && existing.customer_id !== customerId)
+        throw new SenderError('Plaid account is already linked to another customer');
+      if (existing) {
+        ctx.db.externalAccount.account_id.update({
+          ...existing,
+          institution: row.institution.trim(),
+          nickname: row.nickname.trim(),
+          account_type: row.account_type,
+          balance_cents: Math.round(row.balance_cents),
+          apr_pct: row.apr_pct,
+          annual_yield_pct: row.annual_yield_pct,
+          monthly_payment_cents: Math.round(row.monthly_payment_cents),
+        });
+      } else {
+        const existingAccounts = [...ctx.db.externalAccount.customer_id.filter(customerId)];
+        if (existingAccounts.length >= MAX_EXTERNAL)
+          throw new SenderError(`At most ${MAX_EXTERNAL} linked accounts per customer`);
+        ctx.db.externalAccount.insert({
+          account_id: accountId,
+          customer_id: customerId,
+          institution: row.institution.trim(),
+          nickname: row.nickname.trim(),
+          account_type: row.account_type,
+          balance_cents: Math.round(row.balance_cents),
+          apr_pct: row.apr_pct,
+          annual_yield_pct: row.annual_yield_pct,
+          monthly_payment_cents: Math.round(row.monthly_payment_cents),
+          added_at: ctx.timestamp,
+        });
+      }
+    }
+
+    recomputeCustomer(ctx, customerId);
+  }
+);
+
 export const remove_external_account = spacetimedb.reducer({ account_id: t.string() }, (ctx, { account_id }) => {
   const x = ctx.db.externalAccount.account_id.find(account_id);
   if (!x) throw new SenderError(`Unknown linked account ${account_id}`);
@@ -232,6 +315,93 @@ export const recompute_all = spacetimedb.reducer(ctx => {
   assertAdmin(ctx);
   for (const c of [...ctx.db.customer.iter()]) recomputeCustomer(ctx, c.customer_id);
 });
+
+export const generate_180_day_projection = spacetimedb.reducer(
+  { customer_id: t.string() },
+  (ctx, { customer_id }) => {
+    const profile = ctx.db.customer.customer_id.find(customer_id);
+    if (!profile) throw new SenderError(`Unknown customer ${customer_id}`);
+
+    const accounts = [
+      ...ctx.db.account.customer_id.filter(customer_id),
+      ...ctx.db.externalAccount.customer_id.filter(customer_id),
+    ];
+    const liquidAccounts = accounts.filter(account => LIQUID_TYPES.has(account.account_type));
+    const debtAccounts = accounts.filter(account => DEBT_TYPES.has(account.account_type));
+    const currentLiquidCash = liquidAccounts.reduce((total, account) => total + account.balance_cents, 0);
+    const currentTotalDebt = debtAccounts.reduce((total, account) => total + account.balance_cents, 0);
+    const minimumMonthlyPayments = debtAccounts.reduce((total, account) => total + account.monthly_payment_cents, 0);
+
+    const statements = [...ctx.db.statement.customer_id.filter(customer_id)];
+    if (statements.length === 0) throw new SenderError(`No monthly statements found for customer ${customer_id}`);
+    const latestMonth = statements.reduce(
+      (latest, row) => (row.month > latest ? row.month : latest),
+      statements[0].month
+    );
+    const historyMonths = [...new Set(statements.map(row => row.month))]
+      .sort()
+      .slice(-6);
+
+    for (const row of [...ctx.db.financialProjection.customer_id.filter(customer_id)])
+      ctx.db.financialProjection.projection_id.delete(row.projection_id);
+
+    for (const month of historyMonths) {
+      const monthStatements = statements.filter(row => row.month === month);
+      ctx.db.financialProjection.insert({
+        projection_id: `${customer_id}|historical|${month}`,
+        customer_id,
+        month,
+        record_type: 'historical',
+        current_liquid_cash_cents: currentLiquidCash,
+        current_total_debt_cents: currentTotalDebt,
+        total_minimum_monthly_payments_cents: minimumMonthlyPayments,
+        liquid_balance_cents: monthStatements
+          .filter(row => LIQUID_TYPES.has(row.account_type))
+          .reduce((total, row) => total + row.closing_cents, 0),
+        debt_balance_cents: monthStatements
+          .filter(row => DEBT_TYPES.has(row.account_type))
+          .reduce((total, row) => total + row.closing_cents, 0),
+        monthly_income_cents: undefined,
+        monthly_expenses_cents: undefined,
+        monthly_debt_payments_cents: undefined,
+        holiday_expense_spike: false,
+      });
+    }
+
+    const [startYear, startMonth] = latestMonth.split('-').map(Number);
+    let liquidBalance = currentLiquidCash;
+    let debtBalance = currentTotalDebt;
+    for (let offset = 1; offset <= 6; offset++) {
+      const monthIndex = startMonth - 1 + offset;
+      const year = startYear + Math.floor(monthIndex / 12);
+      const monthNumber = (monthIndex % 12) + 1;
+      const month = `${year}-${String(monthNumber).padStart(2, '0')}`;
+      const holidayExpenseSpike = monthNumber === 10 || monthNumber === 11;
+      const monthlyExpenses = Math.round(
+        profile.monthly_non_debt_expenses_cents * (holidayExpenseSpike ? 1.25 : 1)
+      );
+      const debtPayment = Math.min(minimumMonthlyPayments, debtBalance);
+      liquidBalance += profile.monthly_income_cents - monthlyExpenses - debtPayment;
+      debtBalance -= debtPayment;
+
+      ctx.db.financialProjection.insert({
+        projection_id: `${customer_id}|projected|${month}`,
+        customer_id,
+        month,
+        record_type: 'projected',
+        current_liquid_cash_cents: currentLiquidCash,
+        current_total_debt_cents: currentTotalDebt,
+        total_minimum_monthly_payments_cents: minimumMonthlyPayments,
+        liquid_balance_cents: liquidBalance,
+        debt_balance_cents: debtBalance,
+        monthly_income_cents: profile.monthly_income_cents,
+        monthly_expenses_cents: monthlyExpenses,
+        monthly_debt_payments_cents: debtPayment,
+        holiday_expense_spike: holidayExpenseSpike,
+      });
+    }
+  }
+);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Forecast (spec §4–§9): 180-day Monte Carlo, stress tests, sensitivities, coach.

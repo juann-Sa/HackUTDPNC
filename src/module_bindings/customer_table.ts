@@ -13,6 +13,8 @@ import {
 export default __t.row({
   customerId: __t.string().primaryKey().name("customer_id"),
   monthlyIncomeCents: __t.f64().name("monthly_income_cents"),
-  monthlyNonDebtExpensesCents: __t.f64().name("monthly_non_debt_expenses_cents"),
+  monthlyNonDebtExpensesCents: __t
+    .f64()
+    .name("monthly_non_debt_expenses_cents"),
   creditLimitCents: __t.f64().name("credit_limit_cents"),
 });
