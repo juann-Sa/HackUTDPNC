@@ -14,6 +14,7 @@ import { SHRINK_K, buildSchedule } from './math/schedule';
 import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
 import { RISK_CAP, analyze } from './math/coach';
 import { seedFromString } from './math/rng';
+import { type Fact, SYSTEM_PROMPT, pct, templateText, unverifiedNumbers, usd, userPrompt } from './math/narrate';
 
 export default spacetimedb;
 
@@ -372,5 +373,131 @@ export const run_what_if = spacetimedb.reducer(
       cardAprBumpPct: args.card_apr_bump_pct,
     };
     writeForecast(ctx, args.customer_id, runForecast(schedule, a, sc, tapes), a);
+  }
+);
+
+// ─────────────────────────────────────────────────────────────────────────────
+// AI narration: Groq explains stored numbers; it never computes them.
+// ─────────────────────────────────────────────────────────────────────────────
+const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
+const DEFAULT_MODEL = 'openai/gpt-oss-120b';
+
+function gatherFacts(ctx: Ctx, cid: string): Fact[] {
+  const f: Fact[] = [];
+  const add = (key: string, text: string) => f.push({ key, text });
+  const snap = ctx.db.bookSnapshot.customer_id.find(cid);
+  if (!snap) throw new SenderError(`No results for ${cid}; run recompute_customer first`);
+  add('net_worth', `Net worth (excluding home value): ${usd(snap.net_worth_cents)}`);
+  add('cash', `Cash in checking and savings: ${usd(snap.liquid_cents)}`);
+  if (snap.runway_months !== undefined) add('runway', `Months of essential bills cash would cover: ${snap.runway_months.toFixed(1)}`);
+  if (snap.debt_to_income !== undefined) add('dti', `Share of income going to debt payments: ${pct(snap.debt_to_income, 0)}`);
+  if (snap.utilization !== undefined) add('utilization', `Credit card utilization: ${pct(snap.utilization, 0)}`);
+
+  const carry = ctx.db.carrySummary.customer_id.find(cid);
+  if (carry) {
+    add('carry', `Yearly interest earned on savings: ${usd(carry.earn_cents)}; yearly interest paid on debt: ${usd(carry.cost_cents)}`);
+    if (carry.fixable_leak_cents > 0) add('fixable_leak', `Interest that could be saved each year by using spare cash on expensive debt: ${usd(carry.fixable_leak_cents)}`);
+  }
+
+  const pnl = [...ctx.db.pnlMonth.customer_id.filter(cid)].sort((a, b) => (a.month < b.month ? -1 : 1)).slice(-6);
+  if (pnl.length) {
+    const s = (k: keyof (typeof pnl)[number]) => pnl.reduce((p, r) => p + (r[k] as number), 0);
+    add('income_6m', `Paychecks over the last 6 months: ${usd(s('income_cents'))}`);
+    add('spending_6m', `Spending over the last 6 months: ${usd(s('spending_cents'))}`);
+    add('debt_interest_6m', `Debt interest over the last 6 months: ${usd(s('debt_interest_cents'))}`);
+    const ext = s('ext_in_cents') - s('ext_out_cents');
+    if (Math.abs(ext) > 10_000) add('external_6m', `Money moved in from accounts outside this bank over the last 6 months: ${usd(ext)}`);
+    add('organic_6m', `Change in net worth from your own earning and spending over the last 6 months: ${usd(s('organic_cents'))}`);
+  }
+
+  const tl = [...ctx.db.timeline360.customer_id.filter(cid)];
+  const today = tl.find(r => r.day_offset === 0);
+  const end = tl.reduce<(typeof tl)[number] | undefined>((m, r) => (!m || r.day_offset > m.day_offset ? r : m), undefined);
+  if (today?.actual_net_cash_cents !== undefined) add('net_cash_today', `Net cash today (cash minus high-interest debt): ${usd(today.actual_net_cash_cents)}`);
+  if (end?.continue_mid_cents !== undefined && end.continue_low_cents !== undefined && end.continue_high_cents !== undefined) {
+    add('continue_180', `Net cash in 180 days if you continue as you are: about ${usd(end.continue_mid_cents)} (likely between ${usd(end.continue_low_cents)} and ${usd(end.continue_high_cents)})`);
+    const band = (end.continue_high_cents - end.continue_low_cents) / 2;
+    if (today?.actual_liquid_cents) add('band_note', `Forecast margin for normal ups and downs: plus or minus ${usd(band)}, about ${pct(band / today.actual_liquid_cents)} of your cash`);
+  }
+  if (end?.coach_mid_cents !== undefined) {
+    add('coach_180', `Net cash in 180 days if you follow the coach: about ${usd(end.coach_mid_cents)}`);
+    if (end.continue_mid_cents !== undefined) add('coach_gain', `Difference from following the coach after 180 days: ${usd(end.coach_mid_cents - end.continue_mid_cents)}`);
+  }
+  const base = ctx.db.forecastRun.run_id.find(`${cid}|baseline`);
+  if (base) add('p_low', `Chance cash drops below ${usd(base.threshold_cents)} in the next 180 days (including surprises): ${pct(base.p_low)}`);
+  const job = ctx.db.forecastRun.run_id.find(`${cid}|stress_job_loss`);
+  if (job) add('stress_job_loss', `That chance if income stopped for 3 months: ${pct(job.p_low)}`);
+  const bill = ctx.db.forecastRun.run_id.find(`${cid}|stress_bill`);
+  if (bill) add('stress_bill', `That chance after a surprise $3,000 bill: ${pct(bill.p_low)}`);
+  for (const a of ctx.db.coachAction.customer_id.filter(cid)) {
+    if (a.kind === 'move_cash_to_debt')
+      add('action_move', `Coach suggestion: move ${usd(a.amount_cents)} of spare cash to your highest-interest debt, saving about ${usd(a.annual_saving_cents)} a year; chance of running low goes from ${pct(a.p_low_before)} to ${pct(a.p_low_after)}`);
+    else
+      add('action_trim', `Coach suggestion: trim dining, shopping and other extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month, ${usd(a.annual_saving_cents)} a year)`);
+  }
+  return f;
+}
+
+const TOPICS = new Set(['overview', 'past', 'future', 'coach', 'risk']);
+
+/** Explain a customer's numbers in plain language. Falls back to a template if the AI reply fails the number check. */
+export const narrate = spacetimedb.procedure(
+  { customer_id: t.string(), topic: t.string() },
+  t.string(),
+  (ctx, { customer_id: cid, topic }) => {
+    if (!TOPICS.has(topic)) throw new SenderError(`Unknown topic ${topic}`);
+    const facts = ctx.withTx(tx => gatherFacts(tx, cid));
+    const env = (k: 'GROQ_API_KEY' | 'GROQ_MODEL') => {
+      try {
+        return ctx.env.get(k) ?? null;
+      } catch {
+        return null; // environment unavailable (e.g. unit tests): fall back to the template
+      }
+    };
+    const key = env('GROQ_API_KEY');
+    const model = env('GROQ_MODEL') || DEFAULT_MODEL;
+    let text = templateText(topic, facts);
+    let source = 'template';
+    let rejected = key ? '' : 'no GROQ_API_KEY set';
+    if (key) {
+      try {
+        const res = ctx.http.fetch(GROQ_URL, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model,
+            temperature: 0.2,
+            max_completion_tokens: 700,
+            reasoning_effort: 'low',
+            messages: [
+              { role: 'system', content: SYSTEM_PROMPT },
+              { role: 'user', content: userPrompt(topic, facts) },
+            ],
+          }),
+        });
+        if (res.status !== 200) rejected = `groq http ${res.status}`;
+        else {
+          const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
+          const bad = unverifiedNumbers(out, facts);
+          if (!out) rejected = 'empty reply';
+          else if (bad.length) rejected = `unverified numbers: ${bad.slice(0, 5).join(', ')}`;
+          else {
+            text = out;
+            source = 'groq';
+          }
+        }
+      } catch (e) {
+        rejected = `groq error: ${String(e).slice(0, 200)}`;
+      }
+    }
+    ctx.withTx(tx => {
+      const id = `${cid}|${topic}`;
+      if (tx.db.narration.narration_id.find(id)) tx.db.narration.narration_id.delete(id);
+      tx.db.narration.insert({
+        narration_id: id, customer_id: cid, topic, text, source,
+        model: source === 'groq' ? model : 'template', rejected_reason: rejected, created_at: tx.timestamp,
+      });
+    });
+    return text;
   }
 );

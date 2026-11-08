@@ -336,6 +336,21 @@ export const forecastAssumption = table(
   }
 );
 
+/** AI explanations; every number is checked against the stored results before it is shown. */
+export const narration = table(
+  { name: 'narration', public: true },
+  {
+    narration_id: t.string().primaryKey(), // customer_id|topic
+    customer_id: t.string().index('btree'),
+    topic: t.string(), // overview | past | future | coach | risk
+    text: t.string(),
+    source: t.string(), // groq | template
+    model: t.string(),
+    rejected_reason: t.string(), // why an AI reply was replaced by the template ('' if not)
+    created_at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
   admin,
   customer,
@@ -358,5 +373,14 @@ const spacetimedb = schema({
   coachAction,
   forecastAssumption,
   timeline360,
+  narration,
+},
+{
+  // Secrets come from the publisher's shell at publish time, never from the repo:
+  //   GROQ_API_KEY=... spacetime publish spacetime360 --env-only
+  env: {
+    GROQ_API_KEY: t.option(t.string()),
+    GROQ_MODEL: t.option(t.string()),
+  },
 });
 export default spacetimedb;

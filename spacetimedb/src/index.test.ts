@@ -8,6 +8,7 @@ import { ConnectionId } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth } from 'spacetimedb/server/test-utils';
 
 import spacetime, * as m from './index';
+import { type Fact, unverifiedNumbers } from './math/narrate';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
 const DATA = join(ROOT, 'data');
@@ -247,4 +248,33 @@ describe('SpaceTime 360 forecast reducers', () => {
     const cut = test.db.forecastRun.run_id.find('C006|what_if')!;
     expect(cut.end_liquid_p50_cents).toBeGreaterThan(base.end_liquid_p50_cents);
   });
+});
+
+describe('AI narration guardrail', () => {
+  const facts: Fact[] = [
+    { key: 'net_cash_today', text: 'Net cash today (cash minus high-interest debt): $13,557' },
+    { key: 'continue_180', text: 'Net cash in 180 days if you continue as you are: about $9,239 (likely between $8,704 and $9,774)' },
+    { key: 'p_low', text: 'Chance cash drops below $500 in the next 180 days (including surprises): 0.2%' },
+  ];
+  it('accepts a reply that only uses numbers from the facts', () => {
+    const reply = 'Right now your net cash is $13,557. If you keep going as you are, in about 6 months it is likely around $9,239, somewhere between $8,704 and $9,774. The chance of dropping below $500 is only 0.2%.';
+    expect(unverifiedNumbers(reply, facts)).toEqual([]);
+  });
+  it('rejects invented, rounded or computed numbers', () => {
+    expect(unverifiedNumbers('You will lose about $4,318 by spring.', facts)).toEqual(['$4,318']);
+    expect(unverifiedNumbers('Net cash is roughly $13,600.', facts)).toEqual(['$13,600']);
+    expect(unverifiedNumbers('That is a 32% drop.', facts)).toEqual(['32%']);
+  });
+  it('the narrate procedure stores a verified explanation (template without an API key)', () => {
+    const { test } = loadedHarness();
+    test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+    const ctx = test.procedureContext(stranger);
+    const text = m.narrate(ctx, { customer_id: 'C006', topic: 'overview' });
+    const row = test.db.narration.narration_id.find('C006|overview')!;
+    expect(row.text).toBe(text);
+    expect(row.source).toBe('template');
+    expect(text).toMatch(/Net cash today/);
+    expect(() => m.narrate(test.procedureContext(stranger), { customer_id: 'C006', topic: 'gossip' })).toThrow(/Unknown topic/);
+    writeFileSync('/tmp/st360_narration.txt', text);
+  }, 60_000);
 });
