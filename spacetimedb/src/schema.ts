@@ -441,6 +441,19 @@ export const timelineWhatif = table(
   }
 );
 
+export const futureScenario = table(
+  { name: 'future_scenario', public: true },
+  {
+    scenario_id: t.string().primaryKey(), // customer_id|coach or customer_id|user
+    customer_id: t.string().index('btree'),
+    scenario_type: t.string(), // coach | user
+    label: t.string(),
+    scenario_json: t.string(),
+    forecast_json: t.string(),
+    updated_at: t.timestamp(),
+  }
+);
+
 // ---------- free-form questions answered by the engine ----------
 export const qa = table(
   { name: 'qa', public: true },
@@ -454,6 +467,7 @@ export const qa = table(
     answer: t.string(),
     source: t.string(), // groq | template
     rejected_reason: t.string(),
+    scenario_json: t.option(t.string()).default(undefined),
     created_at: t.timestamp(),
   }
 );
@@ -595,6 +609,7 @@ const spacetimedb = schema({
   debtPlan,
   dangerDay,
   timelineWhatif,
+  futureScenario,
   qa,
 },
 {
