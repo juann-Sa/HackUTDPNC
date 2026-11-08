@@ -178,3 +178,56 @@ describe('SpaceTime 360 book math', () => {
     ).toThrow(/owner/);
   });
 });
+
+describe('SpaceTime 360 forecast reducers', () => {
+  const { test } = loadedHarness();
+  test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+
+  it('writes five scenarios with 181 days of bands each', () => {
+    const runs = [...test.db.forecastRun.customer_id.filter('C006')].map(r => r.scenario).sort();
+    expect(runs).toEqual(['baseline', 'coach', 'stress_bill', 'stress_job_loss', 'stress_rates']);
+    for (const sc of runs) {
+      const bands = [...test.db.forecastBand.customer_id.filter('C006')].filter(b => b.scenario === sc);
+      expect(bands.length).toBe(181);
+      for (const b of bands) expect(b.p5_cents <= b.p50_cents && b.p50_cents <= b.p95_cents).toBe(true);
+    }
+  });
+
+  it('coach move equals the carry table fixable leak (same 3-month buffer)', () => {
+    const carry = test.db.carrySummary.customer_id.find('C006')!;
+    const move = test.db.coachAction.action_id.find('C006|move_cash_to_debt')!;
+    expect(move.amount_cents).toBeLessThanOrEqual(carry.idle_cash_cents);
+    expect(carry.idle_cash_cents - move.amount_cents).toBeLessThan(10_000);
+    expect(Math.abs(move.annual_saving_cents - carry.fixable_leak_cents) / carry.fixable_leak_cents).toBeLessThan(0.01);
+    expect(move.p_low_after).toBeLessThanOrEqual(0.05);
+  });
+
+  it('expected-shortfall contributions add up to ES95', () => {
+    const run = test.db.forecastRun.run_id.find('C006|baseline')!;
+    const parts = [...test.db.riskSource.customer_id.filter('C006')].filter(r => r.scenario === 'baseline');
+    const sum = parts.reduce((s, r) => s + r.es_contribution_cents, 0);
+    expect(Math.abs(sum - run.es95_cents)).toBeLessThanOrEqual(parts.length);
+  });
+
+  it('a neutral what-if reproduces the baseline exactly (common random numbers)', () => {
+    test.withReducerTx(stranger, ctx =>
+      m.run_what_if(ctx, {
+        customer_id: 'C006', include_external: false, income_mult: 1, category_mults: [], one_off_cents: 0,
+        one_off_day: 0, move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+      })
+    );
+    const base = test.db.forecastRun.run_id.find('C006|baseline')!;
+    const wi = test.db.forecastRun.run_id.find('C006|what_if')!;
+    expect(wi.p_low).toBe(base.p_low);
+    expect(wi.end_liquid_p50_cents).toBe(base.end_liquid_p50_cents);
+    test.withReducerTx(stranger, ctx =>
+      m.run_what_if(ctx, {
+        customer_id: 'C006', include_external: false, income_mult: 1,
+        category_mults: [{ category: 'dining', mult: 0.5 }], one_off_cents: 0, one_off_day: 0,
+        move_to_debt_cents: 0, job_loss_months: 0, card_apr_bump_pct: 0,
+      })
+    );
+    const cut = test.db.forecastRun.run_id.find('C006|what_if')!;
+    expect(cut.end_liquid_p50_cents).toBeGreaterThan(base.end_liquid_p50_cents);
+  });
+});

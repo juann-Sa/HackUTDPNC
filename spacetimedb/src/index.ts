@@ -9,6 +9,11 @@ import { computeCarry, computeSnapshot } from './math/book';
 import { computePnl, computeSpending } from './math/pnl';
 import { computeDailyLiquid } from './math/daily';
 import { dayNumber, isoFromDayNumber } from './math/dates';
+import { BUFFER_MONTHS } from './math/book';
+import { SHRINK_K, buildSchedule } from './math/schedule';
+import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, makeTapes, runForecast } from './math/forecast';
+import { RISK_CAP, analyze } from './math/coach';
+import { seedFromString } from './math/rng';
 
 export default spacetimedb;
 
@@ -162,3 +167,164 @@ export const recompute_all = spacetimedb.reducer(ctx => {
   assertAdmin(ctx);
   for (const c of [...ctx.db.customer.iter()]) recomputeCustomer(ctx, c.customer_id);
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Forecast (spec §4–§9): 180-day Monte Carlo, stress tests, sensitivities, coach.
+// ─────────────────────────────────────────────────────────────────────────────
+function scheduleFor(ctx: Ctx, cid: string) {
+  const prof = ctx.db.customer.customer_id.find(cid);
+  if (!prof) throw new SenderError(`Unknown customer ${cid}`);
+  const accts = [...ctx.db.account.customer_id.filter(cid)].sort((a, b) => (a.account_id < b.account_id ? -1 : 1));
+  const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
+  if (!ledger.length) throw new SenderError(`No ledger for ${cid}`);
+  const asOf = ledger.reduce((m, t) => (t.posted_date > m ? t.posted_date : m), '');
+  const snap = computeSnapshot(prof, accts);
+  return { schedule: buildSchedule(ledger, accts, asOf, DEFAULT_ASSUMPTIONS.horizonDays), snap };
+}
+
+function clearScenario(ctx: Ctx, cid: string, scenario: string) {
+  for (const r of [...ctx.db.forecastBand.customer_id.filter(cid)])
+    if (r.scenario === scenario) ctx.db.forecastBand.band_id.delete(r.band_id);
+  for (const r of [...ctx.db.riskSource.customer_id.filter(cid)])
+    if (r.scenario === scenario) ctx.db.riskSource.risk_id.delete(r.risk_id);
+  const run = ctx.db.forecastRun.run_id.find(`${cid}|${scenario}`);
+  if (run) ctx.db.forecastRun.run_id.delete(run.run_id);
+}
+
+function writeForecast(ctx: Ctx, cid: string, f: ForecastResult, a: Assumptions) {
+  const scenario = f.scenario.id;
+  clearScenario(ctx, cid, scenario);
+  ctx.db.forecastRun.insert({
+    run_id: `${cid}|${scenario}`,
+    customer_id: cid,
+    scenario,
+    label: f.scenario.label,
+    include_external: f.scenario.includeExternal,
+    paths: 2 * a.pairs,
+    horizon_days: a.horizonDays,
+    start_date: f.dates[0],
+    threshold_cents: a.thresholdCents,
+    p_low: f.pLow,
+    p_low_se: f.pLowSe,
+    var95_cents: round(f.var95),
+    es95_cents: round(f.es95),
+    mdd_p50_cents: round(f.mddP50),
+    mdd_p95_cents: round(f.mddP95),
+    end_liquid_p5_cents: round(f.endLiquid.p5),
+    end_liquid_p50_cents: round(f.endLiquid.p50),
+    end_liquid_p95_cents: round(f.endLiquid.p95),
+    end_net_worth_p5_cents: round(f.endNetWorth.p5),
+    end_net_worth_p50_cents: round(f.endNetWorth.p50),
+    end_net_worth_p95_cents: round(f.endNetWorth.p95),
+    planned_change_cents: round(f.deterministicChange),
+  });
+  f.bands.forEach((b, i) =>
+    ctx.db.forecastBand.insert({
+      band_id: `${cid}|${scenario}|${i}`,
+      customer_id: cid,
+      scenario,
+      day_index: i,
+      date: f.dates[i],
+      p5_cents: round(b.p5),
+      p25_cents: round(b.p25),
+      p50_cents: round(b.p50),
+      p75_cents: round(b.p75),
+      p95_cents: round(b.p95),
+    })
+  );
+  for (const src of f.sources)
+    ctx.db.riskSource.insert({
+      risk_id: `${cid}|${scenario}|${src.source}`,
+      customer_id: cid,
+      scenario,
+      source: src.source,
+      var_share: src.varShare,
+      es_contribution_cents: round(src.esContribution),
+    });
+}
+
+/** Full forward analysis for one customer: baseline, coach path, stresses, sensitivities, frontier. */
+export const run_forecast = spacetimedb.reducer(
+  { customer_id: t.string(), include_external: t.bool() },
+  (ctx, { customer_id: cid, include_external }) => {
+    const { schedule, snap } = scheduleFor(ctx, cid);
+    const a = DEFAULT_ASSUMPTIONS;
+    const seed = seedFromString(cid);
+    const an = analyze(schedule, a, seed, include_external, snap.monthly_outflow_cents);
+    for (const f of [an.baseline, an.coach, ...an.stresses]) writeForecast(ctx, cid, f, a);
+
+    for (const r of [...ctx.db.sensitivity.customer_id.filter(cid)]) ctx.db.sensitivity.sensitivity_id.delete(r.sensitivity_id);
+    for (const r of an.sensitivities)
+      ctx.db.sensitivity.insert({
+        sensitivity_id: `${cid}|${r.lever}`, customer_id: cid, lever: r.lever, label: r.label,
+        delta_p_low: r.deltaPLow, delta_end_p50_cents: round(r.deltaEndP50),
+      });
+    for (const r of [...ctx.db.frontierPoint.customer_id.filter(cid)]) ctx.db.frontierPoint.frontier_id.delete(r.frontier_id);
+    an.frontier.forEach((p, i) =>
+      ctx.db.frontierPoint.insert({
+        frontier_id: `${cid}|${i}`, customer_id: cid, move_cents: p.moveCents, p_low: p.pLow,
+        annual_saving_cents: round(p.annualSavingCents), recommended: p.recommended,
+      })
+    );
+    for (const r of [...ctx.db.coachAction.customer_id.filter(cid)]) ctx.db.coachAction.action_id.delete(r.action_id);
+    for (const x of an.actions)
+      ctx.db.coachAction.insert({
+        action_id: `${cid}|${x.kind}`, customer_id: cid, kind: x.kind, amount_cents: x.amountCents, fraction: x.fraction,
+        annual_saving_cents: round(x.annualSavingCents), p_low_before: x.pLowBefore, p_low_after: x.pLowAfter, detail: x.detail,
+      });
+    const existing = ctx.db.forecastAssumption.customer_id.find(cid);
+    if (existing) ctx.db.forecastAssumption.customer_id.delete(cid);
+    ctx.db.forecastAssumption.insert({
+      customer_id: cid,
+      sigma_shared: schedule.sigmaShared,
+      sigma_idio: schedule.sigmaIdio,
+      phi: schedule.phi,
+      income_sigma: schedule.incomeSigma,
+      shrink_k: SHRINK_K,
+      student_t_nu: a.nu,
+      jumps_per_year: a.jumpsPerYear,
+      jump_median_cents: a.jumpMedianCents,
+      p_job_loss_monthly: a.pEmployedToJobLoss,
+      p_rehire_monthly: a.pJobLossToEmployed,
+      ira_mu: a.iraMu,
+      ira_sigma: a.iraSigma,
+      risk_cap: RISK_CAP,
+      buffer_months: BUFFER_MONTHS,
+      seed,
+    });
+  }
+);
+
+const CategoryMult = t.object('CategoryMult', { category: t.string(), mult: t.f64() });
+
+/** What-if simulator: one custom scenario on the same random draws as the baseline (shared live). */
+export const run_what_if = spacetimedb.reducer(
+  {
+    customer_id: t.string(),
+    include_external: t.bool(),
+    income_mult: t.f64(),
+    category_mults: t.array(CategoryMult),
+    one_off_cents: t.f64(),
+    one_off_day: t.u32(),
+    move_to_debt_cents: t.f64(),
+    job_loss_months: t.u32(),
+    card_apr_bump_pct: t.f64(),
+  },
+  (ctx, args) => {
+    const { schedule } = scheduleFor(ctx, args.customer_id);
+    const a = DEFAULT_ASSUMPTIONS;
+    const tapes = makeTapes(seedFromString(args.customer_id), a, schedule.months.length + 1);
+    const sc: Scenario = {
+      id: 'what_if',
+      label: 'What if',
+      includeExternal: args.include_external,
+      incomeMult: args.income_mult,
+      categoryMult: Object.fromEntries(args.category_mults.map(c => [c.category, c.mult])),
+      oneOff: args.one_off_cents > 0 ? { dayIndex: Math.min(args.one_off_day, a.horizonDays - 1), cents: args.one_off_cents } : undefined,
+      moveToDebtCents: args.move_to_debt_cents,
+      jobLossMonths: args.job_loss_months,
+      cardAprBumpPct: args.card_apr_bump_pct,
+    };
+    writeForecast(ctx, args.customer_id, runForecast(schedule, a, sc, tapes), a);
+  }
+);

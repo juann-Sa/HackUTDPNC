@@ -190,6 +190,127 @@ export const validationIssue = table(
   }
 );
 
+
+// ---------- forecast results (run_forecast / run_what_if) ----------
+// scenario ids: baseline | coach | stress_job_loss | stress_bill | stress_rates | what_if
+export const forecastRun = table(
+  { name: 'forecast_run', public: true },
+  {
+    run_id: t.string().primaryKey(), // customer_id|scenario
+    customer_id: t.string().index('btree'),
+    scenario: t.string(),
+    label: t.string(),
+    include_external: t.bool(),
+    paths: t.u32(),
+    horizon_days: t.u32(),
+    start_date: t.string(),
+    threshold_cents: t.f64(),
+    p_low: t.f64(), // chance liquid cash dips below threshold within the horizon
+    p_low_se: t.f64(),
+    var95_cents: t.f64(), // 5th-percentile loss of liquid cash over the horizon
+    es95_cents: t.f64(), // average loss in the worst 5% of futures
+    mdd_p50_cents: t.f64(),
+    mdd_p95_cents: t.f64(),
+    end_liquid_p5_cents: t.f64(),
+    end_liquid_p50_cents: t.f64(),
+    end_liquid_p95_cents: t.f64(),
+    end_net_worth_p5_cents: t.f64(),
+    end_net_worth_p50_cents: t.f64(),
+    end_net_worth_p95_cents: t.f64(),
+    planned_change_cents: t.f64(), // change with no surprises
+  }
+);
+
+export const forecastBand = table(
+  { name: 'forecast_band', public: true },
+  {
+    band_id: t.string().primaryKey(), // customer_id|scenario|day_index
+    customer_id: t.string().index('btree'),
+    scenario: t.string(),
+    day_index: t.u32(),
+    date: t.string(),
+    p5_cents: t.f64(),
+    p25_cents: t.f64(),
+    p50_cents: t.f64(),
+    p75_cents: t.f64(),
+    p95_cents: t.f64(),
+  }
+);
+
+export const riskSource = table(
+  { name: 'risk_source', public: true },
+  {
+    risk_id: t.string().primaryKey(), // customer_id|scenario|source
+    customer_id: t.string().index('btree'),
+    scenario: t.string(),
+    source: t.string(), // planned_cash_flow | income | spend:<category> | unexpected_bills | card_and_other
+    var_share: t.f64(),
+    es_contribution_cents: t.f64(), // sums to es95 across sources
+  }
+);
+
+export const sensitivity = table(
+  { name: 'sensitivity', public: true },
+  {
+    sensitivity_id: t.string().primaryKey(), // customer_id|lever
+    customer_id: t.string().index('btree'),
+    lever: t.string(),
+    label: t.string(),
+    delta_p_low: t.f64(),
+    delta_end_p50_cents: t.f64(),
+  }
+);
+
+export const frontierPoint = table(
+  { name: 'frontier_point', public: true },
+  {
+    frontier_id: t.string().primaryKey(), // customer_id|index
+    customer_id: t.string().index('btree'),
+    move_cents: t.f64(),
+    p_low: t.f64(),
+    annual_saving_cents: t.f64(),
+    recommended: t.bool(),
+  }
+);
+
+export const coachAction = table(
+  { name: 'coach_action', public: true },
+  {
+    action_id: t.string().primaryKey(), // customer_id|kind
+    customer_id: t.string().index('btree'),
+    kind: t.string(),
+    amount_cents: t.f64(),
+    fraction: t.f64(),
+    annual_saving_cents: t.f64(),
+    p_low_before: t.f64(),
+    p_low_after: t.f64(),
+    detail: t.string(),
+  }
+);
+
+/** Every number the forecast rests on, for the "how we calculated this" panel. */
+export const forecastAssumption = table(
+  { name: 'forecast_assumption', public: true },
+  {
+    customer_id: t.string().primaryKey(),
+    sigma_shared: t.f64(),
+    sigma_idio: t.f64(),
+    phi: t.f64(),
+    income_sigma: t.f64(),
+    shrink_k: t.f64(),
+    student_t_nu: t.f64(),
+    jumps_per_year: t.f64(),
+    jump_median_cents: t.f64(),
+    p_job_loss_monthly: t.f64(),
+    p_rehire_monthly: t.f64(),
+    ira_mu: t.f64(),
+    ira_sigma: t.f64(),
+    risk_cap: t.f64(),
+    buffer_months: t.f64(),
+    seed: t.u32(),
+  }
+);
+
 const spacetimedb = schema({
   admin,
   customer,
@@ -204,5 +325,12 @@ const spacetimedb = schema({
   spendingMonth,
   dailyLiquid,
   validationIssue,
+  forecastRun,
+  forecastBand,
+  riskSource,
+  sensitivity,
+  frontierPoint,
+  coachAction,
+  forecastAssumption,
 });
 export default spacetimedb;
