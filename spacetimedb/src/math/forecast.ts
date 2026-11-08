@@ -65,6 +65,25 @@ export interface Scenario {
   cardAprBumpPct?: number;
   /** Money kept each month by spending less (added to cash at each month start). */
   extraMonthlyCents?: number;
+  /** A financed purchase (car, home...): down payment leaves cash on dayIndex, then a fixed
+   *  amortized payment every month on that day of the month until the loan is paid off. */
+  newLoan?: NewLoan;
+}
+
+export interface NewLoan {
+  dayIndex: number;
+  downCents: number;
+  principalCents: number;
+  aprPct: number;
+  paymentCents: number;
+  label: string;
+}
+
+/** Fixed monthly payment that pays off `principal` over `months` at `aprPct` (standard amortization). */
+export function amortizedPayment(principalCents: number, aprPct: number, months: number): number {
+  if (principalCents <= 0 || months <= 0) return 0;
+  const r = aprPct / 1200;
+  return r === 0 ? principalCents / months : (principalCents * r) / (1 - Math.pow(1 + r, -months));
 }
 
 export const SOURCES = ['income', ...CATEGORIES.map(c => `spend:${c}`), 'unexpected_bills', 'card_and_other'] as const;
@@ -154,9 +173,13 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
   const cardApr = (s.card?.aprPct ?? 0) + (sc.cardAprBumpPct ?? 0);
   const loanBal = s.loans.map(l => l.balance);
   const lockedBal = s.locked.map(l => l.balance);
+  const nl = sc.newLoan;
+  let nlBal = 0;
+  let nlPayDom = 0;
   const highCostDebt = () =>
     ((s.card && s.card.aprPct >= 10) ? cardBal : 0) +
-    s.loans.reduce((p, l, i) => p + (l.aprPct >= 10 ? Math.max(loanBal[i], 0) : 0), 0);
+    s.loans.reduce((p, l, i) => p + (l.aprPct >= 10 ? Math.max(loanBal[i], 0) : 0), 0) +
+    (nl && nl.aprPct >= 10 ? nlBal : 0);
 
   // t0 move: cash to high-cost debt, highest APR first
   let move = Math.min(sc.moveToDebtCents ?? 0, Math.max(x, 0));
@@ -278,6 +301,19 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
       dev[1 + K] -= bill;
     }
     if (sc.oneOff && sc.oneOff.dayIndex === k) x -= sc.oneOff.cents;
+    // financed purchase: down payment on the day, then the monthly payment from the next month on
+    if (nl) {
+      if (k === nl.dayIndex) {
+        x -= nl.downCents;
+        nlBal = nl.principalCents;
+        nlPayDom = Math.min(dom, 28);
+      } else if (k > nl.dayIndex && nlBal > 0 && dom === Math.min(nlPayDom, lastDom)) {
+        const interest = (nlBal * nl.aprPct) / 1200;
+        const pay = Math.min(nl.paymentCents, nlBal + interest);
+        nlBal += interest - pay;
+        x -= pay;
+      }
+    }
     if (sc.extraMonthlyCents && cal.monthStart[k]) x += sc.extraMonthlyCents;
     // month end: savings interest, CD accrual, IRA market move
     if (cal.monthEnd[k]) {
@@ -291,12 +327,13 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
     liquid[k + 1] = x;
     netCash[k + 1] = x - highCostDebt();
   }
-  const endNetWorth = x + lockedBal.reduce((p, v) => p + v, 0) - cardBal - loanBal.reduce((p, v) => p + Math.max(v, 0), 0);
+  // (the purchased item itself is not counted as an asset: the forecast tracks money, not cars)
+  const endNetWorth = x + lockedBal.reduce((p, v) => p + v, 0) - cardBal - loanBal.reduce((p, v) => p + Math.max(v, 0), 0) - nlBal;
   return { liquid, netCash, endNetWorth, dev };
 }
 
 /** The biggest scheduled outflows on a forecast day (expected amounts), as a short readable list. */
-function dayReasons(s: Schedule, cal: Calendar, k: number): string {
+function dayReasons(s: Schedule, cal: Calendar, k: number, sc?: Scenario): string {
   const mi = cal.monthIdx[k];
   const dom = cal.dom[k];
   const iso = cal.iso[k];
@@ -316,6 +353,11 @@ function dayReasons(s: Schedule, cal: Calendar, k: number): string {
     items.push({ label: 'card payment', cents: purchases + (s.card.balance * s.card.aprPct) / 1200 });
   }
   for (const l of s.loans) if (dom === Math.min(l.day, last)) items.push({ label: `${l.type.replace('_', ' ')} payment`, cents: l.payment });
+  const nl = sc?.newLoan;
+  if (nl) {
+    if (k === nl.dayIndex) items.push({ label: `${nl.label} down payment`, cents: nl.downCents });
+    else if (k > nl.dayIndex && dom === Math.min(Math.min(cal.dom[nl.dayIndex], 28), last)) items.push({ label: `${nl.label} payment`, cents: nl.paymentCents });
+  }
   for (const l of s.locked) if (dom === Math.min(l.day, last) && l.contribution > 0) items.push({ label: `${l.type.toUpperCase()} contribution`, cents: l.contribution });
   return items
     .filter(i => i.cents >= 2_000)
@@ -451,7 +493,7 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
       if (c < 0) neg++;
     }
     chk.sort();
-    danger.push({ date: cal.iso[d - 1], pBelow: below / N, pNegative: neg / N, checkingP10: quantile(chk, 0.1), reasons: dayReasons(s, cal, d - 1) });
+    danger.push({ date: cal.iso[d - 1], pBelow: below / N, pNegative: neg / N, checkingP10: quantile(chk, 0.1), reasons: dayReasons(s, cal, d - 1, sc) });
   }
 
   return {

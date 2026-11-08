@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSchedule, type LedgerRow, type AccountRow } from './math/schedule';
-import { DEFAULT_ASSUMPTIONS, makeTapes, runForecast } from './math/forecast';
+import { DEFAULT_ASSUMPTIONS, amortizedPayment, makeTapes, runForecast } from './math/forecast';
 import { analyze, RISK_CAP } from './math/coach';
 import { Draws, Tape, invNorm, seedFromString } from './math/rng';
 import { evaluateQuestion, parseScenario, verdict } from './math/ask';
@@ -190,5 +190,46 @@ describe('debt payoff', () => {
     expect(addMonths('2026-10-31', 3)).toBe('2027-01');
     expect(addMonths('2026-10-31', 14)).toBe('2027-12');
     expect(addMonths('2026-10-31', 0)).toBe('2026-10');
+  });
+});
+
+describe('financed purchase (car loan)', () => {
+  const { ledger, accounts } = customer('C006');
+  const s = buildSchedule(ledger, accounts, '2026-10-31', 180);
+  const a = { ...DEFAULT_ASSUMPTIONS, pairs: 150 };
+  it('amortized payment matches the standard formula', () => {
+    // $25,000 at 7.5% for 60 months = $500.95/month
+    expect(Math.round(amortizedPayment(2_500_000, 7.5, 60))).toBe(50_095);
+    expect(amortizedPayment(1_200_000, 0, 12)).toBe(100_000);
+  });
+  it('parses a car question, filling assumed terms, and clamps', () => {
+    const p = parseScenario('{"supported": true, "purchase_kind": "car", "purchase_price_cents": 3000000, "down_payment_cents": 500000, "loan_apr_pct": null, "loan_term_months": null, "purchase_in_days": 400}');
+    expect(p.purchase).toMatchObject({ kind: 'car', priceCents: 3_000_000, downCents: 500_000, aprPct: 7.5, termMonths: 60, inDays: 179, aprGiven: false });
+    expect(parseScenario('{"supported": true, "purchase_price_cents": 100000, "down_payment_cents": 900000}').purchase!.downCents).toBe(100_000);
+    expect(parseScenario('{"supported": true}').purchase).toBeUndefined();
+  });
+  it('a $30k car with $5k down: down payment and monthly payments hit cash; facts state cushion and DTI', () => {
+    const p = parseScenario('{"supported": true, "purchase_kind": "car", "purchase_price_cents": 3000000, "down_payment_cents": 500000, "purchase_in_days": 30}');
+    const base = parseScenario('{"supported": true}');
+    const ev = evaluateQuestion(s, 503699, p, seedFromString('C006'), a, { incomeCents: 419905, debtPaymentsCents: 217218 });
+    const ev0 = evaluateQuestion(s, 503699, base, seedFromString('C006'), a);
+    // same random draws: before day 30 identical, after it lower by the down payment plus the payments made
+    expect(ev.whatIf.bands[29].p50).toBeCloseTo(ev0.whatIf.bands[29].p50, 0);
+    const gap = ev0.whatIf.bands[180].p50 - ev.whatIf.bands[180].p50;
+    expect(gap).toBeGreaterThan(500_000 + 4 * 50_000);
+    expect(gap).toBeLessThan(500_000 + 6 * 51_000);
+    const keys = ev.facts.map(f => f.key);
+    expect(keys).toEqual(expect.arrayContaining(['ask_payment', 'ask_cushion', 'ask_dti', 'ask_assumed']));
+    expect(ev.facts.find(f => f.key === 'ask_payment')!.text).toContain('$501 a month');
+    expect(ev.facts.find(f => f.key === 'ask_dti')!.text).toMatch(/52% now, 64% with the new loan/);
+    expect(ev.cushionAfter!).toBeLessThan(ev.cushionNow);
+    expect(ev.interpretation).toMatch(/\$30,000 car in 30 days with \$5,000 down, borrowing \$25,000 at 7.5% for 60 months/);
+    // the template fallback passes the number audit
+    expect(auditReply(ev.fallback, ev.facts).ok).toBe(true);
+  });
+  it('verdict caps at tight below a 3-month cushion and risky below 1 month', () => {
+    expect(verdict(0.01, 900_000, 300_000, 2.5)).toBe('tight');
+    expect(verdict(0.01, 900_000, 300_000, 0.5)).toBe('risky');
+    expect(verdict(0.01, 900_000, 300_000, 4)).toBe('comfortable');
   });
 });

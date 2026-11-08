@@ -877,11 +877,11 @@ export const ask = spacetimedb.procedure(
   (ctx, { customer_id: cid, question }) => {
     const q = question.trim().slice(0, 300);
     if (!q) return 'Please type a question.';
-    let prep: { schedule: ReturnType<typeof scheduleFor>['schedule']; outflow: number; asOf: string };
+    let prep: { schedule: ReturnType<typeof scheduleFor>['schedule']; outflow: number; asOf: string; income: number; debtPayments: number };
     try {
       prep = ctx.withTx(tx => {
         const { schedule, snap, asOf } = scheduleFor(tx, cid);
-        return { schedule, outflow: snap.monthly_outflow_cents, asOf };
+        return { schedule, outflow: snap.monthly_outflow_cents, asOf, income: snap.monthly_income_cents, debtPayments: snap.monthly_debt_payments_cents };
       });
     } catch {
       return `No data for ${cid} yet.`;
@@ -913,7 +913,7 @@ export const ask = spacetimedb.procedure(
     }
 
     // 2) run it against the baseline on the same random draws, 3) facts for the answer
-    const ev = evaluateQuestion(prep.schedule, prep.outflow, p, seedFromString(cid), DEFAULT_ASSUMPTIONS);
+    const ev = evaluateQuestion(prep.schedule, prep.outflow, p, seedFromString(cid), DEFAULT_ASSUMPTIONS, { incomeCents: prep.income, debtPaymentsCents: prep.debtPayments });
     const r = explainWithAudit(ctx, ev.facts, `${ANSWER_ASK} The question was: "${q}"`, ev.fallback);
 
     // 4) store: the what-if forecast, the third chart line, and the Q&A
