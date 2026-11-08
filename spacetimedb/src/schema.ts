@@ -407,6 +407,39 @@ export const backtestOverall = table(
   }
 );
 
+// ---------- goals: chance of reaching a money target by a date ----------
+export const goal = table(
+  { name: 'goal', public: true },
+  {
+    goal_id: t.string().primaryKey(), // G-<customer_id>-<n>
+    customer_id: t.string().index('btree'),
+    name: t.string(),
+    kind: t.string(), // save_extra | reach_balance
+    target_cents: t.f64(),
+    target_date: t.string(), // YYYY-MM-DD, at most 365 days ahead
+    created_at: t.timestamp(),
+  }
+);
+
+export const goalResult = table(
+  { name: 'goal_result', public: true },
+  {
+    goal_id: t.string().primaryKey(),
+    customer_id: t.string().index('btree'),
+    as_of: t.string(),
+    days_to_goal: t.u32(),
+    p_success: t.f64(), // chance of reaching the goal (includes surprise bills and job-loss risk)
+    p_success_se: t.f64(),
+    low_cents: t.f64(), // goal metric on the date: 5th / 50th / 95th percentile
+    mid_cents: t.f64(),
+    high_cents: t.f64(),
+    needed_80_cents: t.option(t.f64()), // extra per month for an 80% chance (none: saving alone can't get there)
+    needed_95_cents: t.option(t.f64()),
+    p_with_needed_80: t.option(t.f64()),
+    needed_share_of_extras: t.option(t.f64()), // needed_80 as a share of dining + shopping + other each month
+  }
+);
+
 /** AI explanations; every number is checked against the stored results before it is shown. */
 export const narration = table(
   { name: 'narration', public: true },
@@ -449,6 +482,8 @@ const spacetimedb = schema({
   backtestDay,
   backtestSummary,
   backtestOverall,
+  goal,
+  goalResult,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:

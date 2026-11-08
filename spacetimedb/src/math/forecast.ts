@@ -60,6 +60,8 @@ export interface Scenario {
   moveToDebtCents?: number;
   jobLossMonths?: number;
   cardAprBumpPct?: number;
+  /** Money kept each month by spending less (added to cash at each month start). */
+  extraMonthlyCents?: number;
 }
 
 export const SOURCES = ['income', ...CATEGORIES.map(c => `spend:${c}`), 'unexpected_bills', 'card_and_other'] as const;
@@ -271,6 +273,7 @@ function simulatePath(s: Schedule, a: Assumptions, sc: Scenario, cal: Calendar, 
       dev[1 + K] -= bill;
     }
     if (sc.oneOff && sc.oneOff.dayIndex === k) x -= sc.oneOff.cents;
+    if (sc.extraMonthlyCents && cal.monthStart[k]) x += sc.extraMonthlyCents;
     // month end: savings interest, CD accrual, IRA market move
     if (cal.monthEnd[k]) {
       x += (s.savingsBalance * s.savingsYieldPct) / 1200;
@@ -404,4 +407,18 @@ export function runForecast(s: Schedule, a: Assumptions, sc: Scenario, tapes: Ta
     deterministicChange: detChange,
     sources,
   };
+}
+
+/**
+ * Liquid cash on one day for every path (antithetic pairs adjacent: path 2i and 2i+1 share tape i).
+ * Used for goals, which only care about the balance on their target date.
+ */
+export function liquidOnDay(s: Schedule, a: Assumptions, sc: Scenario, tapes: Tape[], dayIndex: number): Float64Array {
+  const cal = buildCalendar(s, a.horizonDays);
+  const out = new Float64Array(2 * a.pairs);
+  for (let i = 0; i < a.pairs; i++) {
+    out[2 * i] = simulatePath(s, a, sc, cal, new Draws(tapes[i], false)).liquid[dayIndex];
+    out[2 * i + 1] = simulatePath(s, a, sc, cal, new Draws(tapes[i], true)).liquid[dayIndex];
+  }
+  return out;
 }

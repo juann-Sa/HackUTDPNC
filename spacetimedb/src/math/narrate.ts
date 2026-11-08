@@ -83,6 +83,7 @@ export const FACT_TERMS: Record<string, string[]> = {
   dip: ['dip', 'drop', 'fall', 'low point', 'swing', 'down', 'worse'],
   top_risk: ['driver', 'risk', 'biggest', 'main', 'worst', 'bad', 'drive', 'uncertain'],
   top_lever: ['lever', 'help', 'most', 'biggest', 'cut', 'lower', 'change', 'more cash', 'boost'],
+  goal: ['goal', 'chance', 'reach', 'save', 'month', 'target', 'by', 'raise', 'cash'],
 };
 
 const SPELLED = /\b(hundred|thousand|million|billion)s?\b/i;
@@ -165,6 +166,7 @@ export function userPrompt(topic: string, facts: Fact[]): string {
     past: 'Explain what happened to their money over the past months and why.',
     future: 'Explain the two paths for the next 180 days: continuing as they are versus following the coach, and how confident the forecast is.',
     coach: 'Explain the coach\'s recommended actions, what each one saves, and what it does to their risk of running low on cash and to their worst-case outcome.',
+    goals: 'For each goal, say how likely they are to reach it and what it would take if the chance is low.',
     risk: 'Explain how resilient they are: their worst-case outcome, what drives it most, the deepest dip they might see, the stress tests, and the single spending change that helps most.',
   };
   return `${ask[topic] ?? ask.overview}\n\nFacts:\n${facts.map(f => `- ${f.text}`).join('\n')}`;
@@ -179,6 +181,7 @@ export function templateText(topic: string, facts: Fact[]): string {
     past: ['income_6m', 'spending_6m', 'debt_interest_6m', 'external_6m', 'organic_6m'],
     future: ['continue_180', 'coach_180', 'coach_gain', 'band_note'],
     coach: ['action_move', 'action_protect_income', 'action_trim_category', 'action_reserve', 'action_gap', 'action_trim', 'fixable_leak'],
+    goals: ['goal'],
     risk: ['p_low', 'es_worst', 'top_risk', 'dip', 'stress_job_loss', 'stress_bill', 'top_lever', 'runway'],
   };
   const lines = pick(order[topic] ?? order.overview);

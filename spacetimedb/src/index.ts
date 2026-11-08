@@ -16,6 +16,7 @@ import { RISK_CAP, analyze, sourceLabel } from './math/coach';
 import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 import { backtestCustomer } from './math/backtest';
+import { GOAL_KINDS, MAX_GOAL_DAYS, evaluateGoal } from './math/goals';
 
 export default spacetimedb;
 
@@ -233,7 +234,7 @@ export const recompute_all = spacetimedb.reducer(ctx => {
 // ─────────────────────────────────────────────────────────────────────────────
 // Forecast (spec §4–§9): 180-day Monte Carlo, stress tests, sensitivities, coach.
 // ─────────────────────────────────────────────────────────────────────────────
-function scheduleFor(ctx: Ctx, cid: string) {
+function scheduleFor(ctx: Ctx, cid: string, horizonDays = DEFAULT_ASSUMPTIONS.horizonDays) {
   const prof = ctx.db.customer.customer_id.find(cid);
   if (!prof) throw new SenderError(`Unknown customer ${cid}`);
   const accts = [...ctx.db.account.customer_id.filter(cid)].sort((a, b) => (a.account_id < b.account_id ? -1 : 1));
@@ -242,7 +243,7 @@ function scheduleFor(ctx: Ctx, cid: string) {
   const asOf = ledger.reduce((m, t) => (t.posted_date > m ? t.posted_date : m), '');
   const external = externalAccountsOf(ctx, cid);
   const snap = computeSnapshot(prof, [...accts, ...external]);
-  return { schedule: buildSchedule(ledger, accts, asOf, DEFAULT_ASSUMPTIONS.horizonDays, external), snap };
+  return { schedule: buildSchedule(ledger, accts, asOf, horizonDays, external), snap, asOf };
 }
 
 function clearScenario(ctx: Ctx, cid: string, scenario: string) {
@@ -533,10 +534,31 @@ function gatherFacts(ctx: Ctx, cid: string): Fact[] {
     else
       add('action_trim', `Coach suggestion: trim dining, shopping and other extras by ${pct(a.fraction, 0)} (${usd(a.amount_cents)} a month, ${usd(a.annual_saving_cents)} a year)`);
   }
+  const longDate = (iso: string) => {
+    const M = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${M[Number(iso.slice(5, 7)) - 1]} ${Number(iso.slice(8, 10))}, ${iso.slice(0, 4)}`;
+  };
+  for (const g of ctx.db.goal.customer_id.filter(cid)) {
+    const r = ctx.db.goalResult.goal_id.find(g.goal_id);
+    if (!r) continue;
+    const what = g.kind === 'save_extra' ? `save an extra ${usd(g.target_cents)}` : `have ${usd(g.target_cents)} in cash`;
+    const plan =
+      r.p_success >= 0.8
+        ? ''
+        : r.needed_80_cents !== undefined
+          ? `; keeping about ${usd(r.needed_80_cents)} more each month raises the chance to ${pct(r.p_with_needed_80 ?? 0.8, 0)}` +
+            (r.needed_share_of_extras !== undefined && r.needed_share_of_extras > 1
+              ? ', which is more than your whole monthly spending on dining, shopping and other extras, so a later date or smaller target is more realistic'
+              : r.needed_share_of_extras !== undefined
+                ? ` (about ${pct(r.needed_share_of_extras, 0)} of what you spend on dining, shopping and other extras)`
+                : '')
+          : '; saving more alone would not get there in time';
+    add('goal', `Goal "${g.name}" (${what} by ${longDate(g.target_date)}): chance of reaching it ${pct(r.p_success, 0)}${plan}`);
+  }
   return f;
 }
 
-const TOPICS = new Set(['overview', 'past', 'future', 'coach', 'risk']);
+const TOPICS = new Set(['overview', 'past', 'future', 'coach', 'risk', 'goals']);
 
 /** Explain a customer's numbers in plain language. Falls back to a template if the AI reply fails the number check. */
 export const narrate = spacetimedb.procedure(
@@ -693,4 +715,76 @@ export const summarize_backtests = spacetimedb.reducer(ctx => {
     end_half_width_pct_median: median(r => r.end_half_width_pct),
     share_customers_coverage_80: mean(r => (r.coverage90 >= 0.8 ? 1 : 0)),
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Goals: chance of reaching a money target by a date, and what it would take.
+// ─────────────────────────────────────────────────────────────────────────────
+const MAX_GOALS = 10;
+
+function evaluateOne(ctx: Ctx, g: { goal_id: string; customer_id: string; kind: string; target_cents: number; target_date: string }) {
+  const latest = [...ctx.db.ledgerEntry.customer_id.filter(g.customer_id)].reduce((m, x) => (x.posted_date > m ? x.posted_date : m), '');
+  const days = dayNumber(g.target_date) - dayNumber(latest);
+  if (days < 1 || days > MAX_GOAL_DAYS) {
+    if (ctx.db.goalResult.goal_id.find(g.goal_id)) ctx.db.goalResult.goal_id.delete(g.goal_id);
+    return;
+  }
+  const { schedule, asOf } = scheduleFor(ctx, g.customer_id, days);
+  const r = evaluateGoal(schedule, DEFAULT_ASSUMPTIONS, seedFromString(g.goal_id), { kind: g.kind, targetCents: g.target_cents, targetDate: g.target_date }, false);
+  if (ctx.db.goalResult.goal_id.find(g.goal_id)) ctx.db.goalResult.goal_id.delete(g.goal_id);
+  ctx.db.goalResult.insert({
+    goal_id: g.goal_id,
+    customer_id: g.customer_id,
+    as_of: asOf,
+    days_to_goal: r.dayIndex,
+    p_success: r.pSuccess,
+    p_success_se: r.pSuccessSe,
+    low_cents: round(r.low),
+    mid_cents: round(r.mid),
+    high_cents: round(r.high),
+    needed_80_cents: r.needed80,
+    needed_95_cents: r.needed95,
+    p_with_needed_80: r.pWith80,
+    needed_share_of_extras: r.neededShareOfExtras,
+  });
+}
+
+/** Add a money goal and compute its chances right away. */
+export const add_goal = spacetimedb.reducer(
+  { customer_id: t.string(), name: t.string(), kind: t.string(), target_cents: t.f64(), target_date: t.string() },
+  (ctx, a) => {
+    if (!ctx.db.customer.customer_id.find(a.customer_id)) throw new SenderError(`Unknown customer ${a.customer_id}`);
+    const name = a.name.trim();
+    if (!name || name.length > 60) throw new SenderError('Goal name must be 1-60 characters');
+    if (!GOAL_KINDS.has(a.kind)) throw new SenderError('Goal kind must be save_extra or reach_balance');
+    if (!Number.isFinite(a.target_cents) || a.target_cents <= 0) throw new SenderError('Target must be a positive amount');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(a.target_date)) throw new SenderError('Target date must be YYYY-MM-DD');
+    const latest = [...ctx.db.ledgerEntry.customer_id.filter(a.customer_id)].reduce((m, x) => (x.posted_date > m ? x.posted_date : m), '');
+    const days = dayNumber(a.target_date) - dayNumber(latest);
+    if (days < 7 || days > MAX_GOAL_DAYS) throw new SenderError(`Target date must be between 7 and ${MAX_GOAL_DAYS} days after ${latest}`);
+    const existing = [...ctx.db.goal.customer_id.filter(a.customer_id)];
+    if (existing.length >= MAX_GOALS) throw new SenderError(`At most ${MAX_GOALS} goals per customer`);
+    const n = 1 + existing.reduce((m, x) => Math.max(m, Number(x.goal_id.split('-').pop()) || 0), 0);
+    const row = ctx.db.goal.insert({
+      goal_id: `G-${a.customer_id}-${n}`,
+      customer_id: a.customer_id,
+      name,
+      kind: a.kind,
+      target_cents: Math.round(a.target_cents),
+      target_date: a.target_date,
+      created_at: ctx.timestamp,
+    });
+    evaluateOne(ctx, row);
+  }
+);
+
+export const remove_goal = spacetimedb.reducer({ goal_id: t.string() }, (ctx, { goal_id }) => {
+  if (!ctx.db.goal.goal_id.find(goal_id)) throw new SenderError(`Unknown goal ${goal_id}`);
+  ctx.db.goal.goal_id.delete(goal_id);
+  if (ctx.db.goalResult.goal_id.find(goal_id)) ctx.db.goalResult.goal_id.delete(goal_id);
+});
+
+/** Re-run every goal for a customer (after linking accounts, new data, etc.). */
+export const evaluate_goals = spacetimedb.reducer({ customer_id: t.string() }, (ctx, { customer_id }) => {
+  for (const g of [...ctx.db.goal.customer_id.filter(customer_id)]) evaluateOne(ctx, g);
 });

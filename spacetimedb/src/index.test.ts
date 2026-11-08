@@ -430,3 +430,40 @@ describe('coach driven by the risk breakdown, and advanced metrics in narration'
     writeFileSync('/tmp/st360_risk_text.txt', text + '\n\n' + coachText);
   }, 60_000);
 });
+
+describe('goals', () => {
+  const { test } = loadedHarness();
+  const add = (over: Record<string, unknown>) =>
+    test.withReducerTx(stranger, ctx =>
+      m.add_goal(ctx, { customer_id: 'C002', name: 'Trip fund', kind: 'save_extra', target_cents: 300_000, target_date: '2027-03-31', ...over } as any)
+    );
+
+  it('computes the chance of a goal and what it would take', () => {
+    add({});
+    add({ name: 'Big cushion', kind: 'reach_balance', target_cents: 6_000_000, target_date: '2027-06-30' });
+    const r1 = test.db.goalResult.goal_id.find('G-C002-1')!;
+    const r2 = test.db.goalResult.goal_id.find('G-C002-2')!;
+    expect(r1.days_to_goal).toBe(151);
+    expect(r1.p_success).toBeGreaterThanOrEqual(0);
+    expect(r1.p_success).toBeLessThanOrEqual(1);
+    expect(r1.low_cents <= r1.mid_cents && r1.mid_cents <= r1.high_cents).toBe(true);
+    if (r1.p_success < 0.8) {
+      expect(r1.needed_80_cents).toBeDefined();
+      expect(r1.p_with_needed_80!).toBeGreaterThanOrEqual(0.75);
+    }
+    // a stretch goal: low chance, and the solver says how much more per month (or that saving alone can't do it)
+    expect(r2.p_success).toBeLessThan(0.5);
+    writeFileSync('/tmp/st360_goals.txt', JSON.stringify({ r1, r2 }, null, 1));
+  }, 120_000);
+
+  it('validates input and appears in the goals narration', () => {
+    expect(() => add({ kind: 'lottery' })).toThrow(/kind/);
+    expect(() => add({ target_cents: 0 })).toThrow(/positive/);
+    expect(() => add({ target_date: '2028-12-31' })).toThrow(/between 7 and 365 days/);
+    const text = m.narrate(test.procedureContext(stranger), { customer_id: 'C002', topic: 'goals' });
+    expect(text).toMatch(/Goal "Trip fund"/);
+    test.withReducerTx(stranger, ctx => m.remove_goal(ctx, { goal_id: 'G-C002-2' }));
+    expect(test.db.goalResult.goal_id.find('G-C002-2')).toBeFalsy();
+    writeFileSync('/tmp/st360_goals_text.txt', text);
+  }, 120_000);
+});
