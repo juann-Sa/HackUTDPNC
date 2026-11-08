@@ -14,7 +14,7 @@ import { SHRINK_K, buildSchedule } from './math/schedule';
 import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenario, habitAssumptions, makeTapes, runForecast } from './math/forecast';
 import { RISK_CAP, analyze } from './math/coach';
 import { seedFromString } from './math/rng';
-import { type Fact, SYSTEM_PROMPT, pct, templateText, unverifiedNumbers, usd, userPrompt } from './math/narrate';
+import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 
 export default spacetimedb;
 
@@ -549,15 +549,12 @@ export const narrate = spacetimedb.procedure(
             break;
           }
           const out: string = (JSON.parse(res.text()).choices?.[0]?.message?.content ?? '').trim();
-          const bad = unverifiedNumbers(out, facts);
+          const audit = auditReply(out, facts);
           if (!out) rejected = 'empty reply';
-          else if (bad.length) {
-            rejected = `unverified numbers (attempt ${attempt + 1}): ${bad.slice(0, 5).join(', ')}`;
+          else if (!audit.ok) {
+            rejected = `attempt ${attempt + 1}: ${audit.problems.slice(0, 5).join('; ')}`;
             messages.push({ role: 'assistant', content: out });
-            messages.push({
-              role: 'user',
-              content: `These numbers are not in the facts: ${bad.join(', ')}. Rewrite the answer using only numbers copied exactly from the facts.`,
-            });
+            messages.push({ role: 'user', content: audit.feedback });
             continue;
           } else {
             text = out;

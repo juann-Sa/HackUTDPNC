@@ -48,7 +48,87 @@ function isRounding(cand: string, fact: string): boolean {
   return false;
 }
 
-/** Returns the numbers in `text` that are neither in the facts nor an honest rounding of a fact. */
+/**
+ * Words that must appear near a fact's number (left of it in the same sentence, or right of it up to
+ * the next number). Keeps each number tied to what it measures: "net cash" is not "cash".
+ */
+export const FACT_TERMS: Record<string, string[]> = {
+  net_worth: ['net worth'],
+  cash: ['cash', 'checking', 'savings'],
+  runway: ['month', 'bills', 'cover'],
+  dti: ['debt', 'income'],
+  utilization: ['credit', 'card', 'utiliz'],
+  carry: ['interest', 'earn', 'paid', 'pay'],
+  fixable_leak: ['interest', 'save', 'saving'],
+  income_6m: ['paycheck', 'earn', 'income', 'made', 'brought in', 'pay'],
+  spending_6m: ['spen'],
+  debt_interest_6m: ['interest'],
+  external_6m: ['outside', 'other bank', 'other account', 'moved', 'transfer'],
+  organic_6m: ['net worth'],
+  net_cash_today: ['net cash'],
+  continue_180: ['net cash'],
+  coach_180: ['net cash'],
+  coach_gain: ['coach', 'difference', 'better', 'more', 'ahead'],
+  band_note: ['margin', 'plus or minus', '±', 'range', 'between', 'give or take', 'ups and downs', 'band'],
+  p_low: ['chance', 'risk', 'odds', 'probab', 'likel', 'below', 'under', 'low'],
+  stress_job_loss: ['income', 'job', 'paycheck', 'stop', 'lose', 'lost'],
+  stress_bill: ['bill', 'surprise', 'expense'],
+  action_move: ['move', 'debt', 'save', 'saving', 'chance', 'risk', 'low'],
+  action_trim: ['trim', 'cut', 'dining', 'shopping', 'extras', 'month', 'year', 'save'],
+};
+
+const SPELLED = /\b(hundred|thousand|million|billion)s?\b/i;
+
+/** Number tokens in a fact, normalized. */
+const factNumbers = (f: Fact) => (f.text.match(NUM_RE) ?? []).map(norm);
+
+export interface Audit {
+  ok: boolean;
+  problems: string[]; // short, for logs
+  feedback: string; // instruction sent back to the model on retry
+}
+
+/** Check a reply: every number must come from a fact (or honestly round one) and keep that fact's label. */
+export function auditReply(text: string, facts: Fact[]): Audit {
+  const unverified: string[] = [];
+  const mislabeled: { tok: string; label: string }[] = [];
+  const spelled = SPELLED.test(text);
+  const sentences = text.split(/(?<=[.!?])\s+/);
+  for (const sentence of sentences) {
+    const hits = [...sentence.matchAll(NUM_RE)];
+    hits.forEach((m, i) => {
+      const tok = m[0];
+      const n = norm(tok);
+      const plain = !tok.includes('$') && !tok.includes('%');
+      if (plain && FREE_NUMBERS.has(n)) return;
+      const candidates = facts.filter(f => factNumbers(f).some(x => x === n || x === n.replace(/%$/, '') || isRounding(n, x)));
+      if (!candidates.length) {
+        unverified.push(tok);
+        return;
+      }
+      const left = sentence.slice(0, m.index).toLowerCase();
+      const end = i + 1 < hits.length ? hits[i + 1].index! : sentence.length;
+      const right = sentence.slice(m.index! + tok.length, end).toLowerCase();
+      const labeled = candidates.some(f => (FACT_TERMS[f.key] ?? []).length === 0 ||
+        (FACT_TERMS[f.key] ?? []).some(term => left.includes(term) || right.includes(term)));
+      if (!labeled) mislabeled.push({ tok, label: (FACT_TERMS[candidates[0].key] ?? [''])[0] });
+    });
+  }
+  const problems = [
+    ...unverified.map(x => `unverified ${x}`),
+    ...mislabeled.map(x => `${x.tok} missing label "${x.label}"`),
+    ...(spelled ? ['spelled-out amount'] : []),
+  ];
+  const feedback = [
+    unverified.length ? `These numbers are not in the facts: ${unverified.join(', ')}.` : '',
+    ...mislabeled.map(x => `${x.tok} must be described as "${x.label}", exactly as in the facts.`),
+    spelled ? 'Write every amount with digits, never words like "thousand".' : '',
+    'Rewrite the answer using only numbers copied from the facts, each with its own label.',
+  ].filter(Boolean).join(' ');
+  return { ok: problems.length === 0, problems, feedback };
+}
+
+/** Numbers in `text` that are neither in the facts nor an honest rounding of one (label not checked). */
 export function unverifiedNumbers(text: string, facts: Fact[]): string[] {
   const ok = allowedNumbers(facts);
   const bad: string[] = [];

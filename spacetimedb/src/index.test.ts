@@ -8,7 +8,7 @@ import { ConnectionId } from 'spacetimedb';
 import { createModuleTestHarness, TestAuth } from 'spacetimedb/server/test-utils';
 
 import spacetime, * as m from './index';
-import { type Fact, unverifiedNumbers } from './math/narrate';
+import { type Fact, auditReply, unverifiedNumbers } from './math/narrate';
 
 const ROOT = process.env.ST360_ROOT ?? fileURLToPath(new URL('../../', import.meta.url));
 const DATA = join(ROOT, 'data');
@@ -329,5 +329,44 @@ describe('linked outside accounts', () => {
     test.withReducerTx(stranger, ctx => m.remove_external_account(ctx, { account_id: 'EXT-C006-2' }));
     expect(test.db.bookSnapshot.customer_id.find('C006')!.liquid_cents).toBe(before.liquid_cents);
     expect(test.db.bookLine.account_id.find('EXT-C006-2')).toBeFalsy();
+  });
+});
+
+describe('AI narration: label binding and spelled-out amounts', () => {
+  // Facts as gatherFacts writes them for C006, and the real Groq reply from the first live test.
+  const facts: Fact[] = [
+    { key: 'net_worth', text: 'Net worth (excluding home value): -$143,553' },
+    { key: 'cash', text: 'Cash in checking and savings: $29,665' },
+    { key: 'runway', text: 'Months of essential bills cash would cover: 5.9' },
+    { key: 'dti', text: 'Share of income going to debt payments: 52%' },
+    { key: 'utilization', text: 'Credit card utilization: 66%' },
+    { key: 'income_6m', text: 'Paychecks over the last 6 months: $25,142' },
+    { key: 'spending_6m', text: 'Spending over the last 6 months: $17,302' },
+    { key: 'organic_6m', text: 'Change in net worth from your own earning and spending over the last 6 months: $339' },
+    { key: 'net_cash_today', text: 'Net cash today (cash minus high-interest debt): $13,557' },
+    { key: 'continue_180', text: 'Net cash in 180 days if you continue as you are: about $9,239 (likely between $8,697 and $9,768)' },
+    { key: 'coach_180', text: 'Net cash in 180 days if you follow the coach: about $10,870' },
+    { key: 'action_move', text: 'Coach suggestion: move $14,500 of spare cash to your highest-interest debt, saving about $1,999 a year; chance of running low goes from 0.5% to 1.5%' },
+  ];
+  const live =
+    "You’ve built up $29,665 in checking and savings, which covers about 5.9 months of essential bills, but after subtracting high‑interest debt your net cash sits at $13,557 and your overall net worth (excluding your home) is –$143,553. " +
+    'Over the past six months you earned $25,142, spent $17,302 and only nudged net worth up $339, while 52% of your income goes to debt and credit‑card use sits at 66%. ' +
+    'If you keep spending the same, your cash will likely fall to about $9,239 in 180 days, but following the coach’s plan could lift it to about $10,870. ' +
+    'The single most useful next step is to move $14,500 of spare cash to your highest‑interest debt, which should save about $1,999 a year.';
+
+  it('catches the real "cash" vs "net cash" slip from the live test', () => {
+    const a = auditReply(live, facts);
+    expect(a.ok).toBe(false);
+    expect(a.problems).toEqual(['$9,239 missing label "net cash"', '$10,870 missing label "net cash"']);
+    expect(a.feedback).toMatch(/\$9,239 must be described as "net cash"/);
+  });
+  it('accepts the same reply once the label is right', () => {
+    const fixed = live.replace('your cash will likely fall', 'your net cash will likely fall');
+    expect(auditReply(fixed, facts)).toMatchObject({ ok: true, problems: [] });
+  });
+  it('accepts a range under the same label and rejects spelled-out amounts', () => {
+    expect(auditReply('Your net cash will likely land around $9,239, somewhere between $8,697 and $9,768.', facts).ok).toBe(true);
+    expect(auditReply('Your net cash is about thirteen thousand dollars.', facts).problems).toContain('spelled-out amount');
+    expect(auditReply('Your net worth is $13,557.', facts).problems).toEqual(['$13,557 missing label "net cash"']);
   });
 });
