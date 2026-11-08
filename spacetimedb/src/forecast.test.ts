@@ -192,3 +192,27 @@ describe('debt payoff', () => {
     expect(addMonths('2026-10-31', 0)).toBe('2026-10');
   });
 });
+
+describe('snowball vs avalanche', () => {
+  // small low-rate loan vs big high-rate card: snowball clears the small one first but pays more interest
+  const debts = [
+    { id: 'C', type: 'credit_card', balance: 900_000, aprPct: 22.5, payment: 0, isCard: true, paydown: 15_000 },
+    { id: 'S', type: 'auto_loan', balance: 150_000, aprPct: 5, payment: 10_000, isCard: false, paydown: 0 },
+    { id: 'M', type: 'mortgage', balance: 5_000_000, aprPct: 6.5, payment: 40_000, isCard: false, paydown: 0 },
+  ];
+  it('default order is avalanche (unchanged)', () => {
+    expect(simulatePayoff(debts, 100_000, true)).toEqual(simulatePayoff(debts, 100_000, true, 'avalanche'));
+  });
+  it('snowball moves cash to the smallest balance and costs more interest', () => {
+    const av = simulatePayoff(debts, 100_000, true, 'avalanche');
+    const sn = simulatePayoff(debts, 100_000, true, 'snowball');
+    expect(av.debts[0].months!).toBeLessThanOrEqual(sn.debts[0].months!); // card never later under avalanche
+    expect(sn.debts[1].months!).toBeLessThan(av.debts[1].months!); // small loan cleared sooner by snowball
+    expect(sn.totalInterest).toBeGreaterThan(av.totalInterest);
+  });
+  it('snowball never sends the cash move to the mortgage', () => {
+    const sn = simulatePayoff([debts[2]], 100_000, true, 'snowball');
+    expect(sn.debts[0].balance).toBe(5_000_000);
+    expect(sn.totalInterest).toBeCloseTo(simulatePayoff([debts[2]], 0, true, 'snowball').totalInterest, 0);
+  });
+});

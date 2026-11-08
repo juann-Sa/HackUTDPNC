@@ -10,8 +10,8 @@ export interface LedgerRow { posted_date: string; account_id: string; account_ty
 export interface StatementRow { account_id: string; month: string; closing_cents: number }
 export interface PnlRow { month: string; income_cents: number; spending_cents: number; delta_net_worth_cents: number }
 export interface SnapshotRow { as_of: string; net_worth_cents: number; liquid_cents: number; total_assets_cents: number; total_debt_cents: number; monthly_outflow_cents: number; runway_months: number | null; utilization: number | null }
-export interface PayoffRow { account_id: string; account_type: string; apr_pct: number; payoff_months: number | null; payoff_month: string | null; coach_payoff_months: number | null; coach_payoff_month: string | null }
-export interface PlanRow { consumer_free_month: string | null; coach_consumer_free_month: string | null; interest_saved_cents: number }
+export interface PayoffRow { account_id: string; account_type: string; apr_pct: number; payoff_months: number | null; payoff_month: string | null; coach_payoff_months: number | null; coach_payoff_month: string | null; snowball_payoff_month?: string | null }
+export interface PlanRow { consumer_free_month: string | null; coach_consumer_free_month: string | null; interest_saved_cents: number; snowball_consumer_free_month?: string | null; snowball_extra_interest_cents?: number }
 export interface DangerRow { date: string; p_below: number; reasons: string }
 export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
 export interface CustomerRow { customer_id: string; credit_limit_cents: number }
@@ -151,7 +151,11 @@ export function accountTabsFor(d: CustomerData): { data: Record<AccountType, Acc
       metrics: loans.map(l => {
         const p = payoff.get(l.account_id);
         return { label: `${prettyType(l.account_type)} · ${l.apr_pct}% APR · ${money(l.balance_cents)}`, value: p ? `Paid off ${payoffLabel(p.payoff_months, p.payoff_month)} (plan: ${payoffLabel(p.coach_payoff_months, p.coach_payoff_month)})` : money(l.monthly_payment_cents) + "/mo" };
-      }).concat(plan && plan.interest_saved_cents > 0 ? [{ label: "Interest the plan saves", value: money(plan.interest_saved_cents) }] : []),
+      }).concat(plan && plan.interest_saved_cents > 0 ? [{ label: "Interest the plan saves", value: money(plan.interest_saved_cents) }] : [])
+        .concat(plan && plan.snowball_extra_interest_cents != null && (plan.snowball_consumer_free_month !== undefined) ? [{
+          label: "Smallest-first (snowball)",
+          value: `Debt-free ${monthLabel(plan.snowball_consumer_free_month)}, ${Math.abs(plan.snowball_extra_interest_cents) < 100 ? "same interest" : `${money(Math.abs(plan.snowball_extra_interest_cents))} ${plan.snowball_extra_interest_cents > 0 ? "more" : "less"} interest`}`,
+        }] : []),
       progress: opened > 0 ? { label: "Principal repaid (past 2 years)", value: Math.round(100 * repaid), detail: `${pct(repaid, 0)} of loan balances repaid since the history began` } : undefined,
     },
     investment: {
