@@ -357,6 +357,53 @@ export const forecastAssumption = table(
   }
 );
 
+// ---------- backtest: what we would have predicted vs what actually happened ----------
+export const backtestDay = table(
+  { name: 'backtest_day', public: true },
+  {
+    backtest_day_id: t.string().primaryKey(), // customer_id|day_index
+    customer_id: t.string().index('btree'),
+    day_index: t.u32(), // 1 = first day after the cutoff
+    date: t.string(),
+    actual_cents: t.f64(), // organic: cash without the synthetic outside-account top-ups
+    actual_raw_cents: t.f64(),
+    low_cents: t.f64(), // 5th percentile forecast made at the cutoff
+    mid_cents: t.f64(),
+    high_cents: t.f64(),
+    inside: t.bool(),
+  }
+);
+
+export const backtestSummary = table(
+  { name: 'backtest_summary', public: true },
+  {
+    customer_id: t.string().primaryKey(),
+    cutoff: t.string(),
+    end: t.string(),
+    paths: t.u32(),
+    coverage90: t.f64(), // share of days inside the 90% band (target ≈ 0.90)
+    coverage90_raw: t.f64(),
+    end_error_pct: t.f64(), // |forecast median − actual| on the last day, share of cash at the cutoff
+    end_half_width_pct: t.f64(),
+    pinball: t.f64(),
+  }
+);
+
+export const backtestOverall = table(
+  { name: 'backtest_overall', public: true },
+  {
+    overall_id: t.u32().primaryKey(), // always 0
+    customers: t.u32(),
+    cutoff: t.string(),
+    end: t.string(),
+    coverage90_mean: t.f64(),
+    coverage90_raw_mean: t.f64(),
+    end_error_pct_median: t.f64(),
+    end_half_width_pct_median: t.f64(),
+    share_customers_coverage_80: t.f64(),
+  }
+);
+
 /** AI explanations; every number is checked against the stored results before it is shown. */
 export const narration = table(
   { name: 'narration', public: true },
@@ -396,6 +443,9 @@ const spacetimedb = schema({
   forecastAssumption,
   timeline360,
   narration,
+  backtestDay,
+  backtestSummary,
+  backtestOverall,
 },
 {
   // Secrets come from the publisher's shell at publish time, never from the repo:

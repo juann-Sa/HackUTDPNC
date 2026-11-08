@@ -15,6 +15,7 @@ import { type Assumptions, DEFAULT_ASSUMPTIONS, type ForecastResult, type Scenar
 import { RISK_CAP, analyze } from './math/coach';
 import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
+import { backtestCustomer } from './math/backtest';
 
 export default spacetimedb;
 
@@ -579,3 +580,86 @@ export const narrate = spacetimedb.procedure(
     return text;
   }
 );
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Backtest (spec §10): forecast a period we already know from data before it.
+// ─────────────────────────────────────────────────────────────────────────────
+const BACKTEST_MONTHS = 6;
+
+/** Last day of the month BACKTEST_MONTHS before the as-of month (2026-10-31 → 2026-04-30). */
+function defaultCutoff(asOf: string): string {
+  let y = Number(asOf.slice(0, 4));
+  let m = Number(asOf.slice(5, 7)) - BACKTEST_MONTHS + 1;
+  while (m <= 0) {
+    m += 12;
+    y -= 1;
+  }
+  return isoFromDayNumber(dayNumber(`${y}-${String(m).padStart(2, '0')}-01`) - 1);
+}
+
+export const run_backtest = spacetimedb.reducer(
+  { customer_id: t.string(), cutoff: t.string() },
+  (ctx, { customer_id: cid, cutoff }) => {
+    if (!ctx.db.customer.customer_id.find(cid)) throw new SenderError(`Unknown customer ${cid}`);
+    const ledger = [...ctx.db.ledgerEntry.customer_id.filter(cid)];
+    if (!ledger.length) throw new SenderError(`No ledger for ${cid}`);
+    const first = ledger.reduce((m, x) => (x.posted_date < m ? x.posted_date : m), ledger[0].posted_date);
+    const asOf = ledger.reduce((m, x) => (x.posted_date > m ? x.posted_date : m), '');
+    const cut = cutoff || defaultCutoff(asOf);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(cut) || dayNumber(cut) - dayNumber(first) < 180 || dayNumber(asOf) - dayNumber(cut) < 30)
+      throw new SenderError('Cutoff must be YYYY-MM-DD with at least 180 days of history before it and 30 days after it');
+    const accts = [...ctx.db.account.customer_id.filter(cid)].sort((a, b) => (a.account_id < b.account_id ? -1 : 1));
+    const a = DEFAULT_ASSUMPTIONS;
+    const r = backtestCustomer(ledger, accts, cut, asOf, a, seedFromString(cid));
+
+    for (const row of [...ctx.db.backtestDay.customer_id.filter(cid)]) ctx.db.backtestDay.backtest_day_id.delete(row.backtest_day_id);
+    for (const d of r.days)
+      ctx.db.backtestDay.insert({
+        backtest_day_id: `${cid}|${d.dayIndex}`,
+        customer_id: cid,
+        day_index: d.dayIndex,
+        date: d.date,
+        actual_cents: round(d.actual),
+        actual_raw_cents: round(d.actualRaw),
+        low_cents: round(d.p5),
+        mid_cents: round(d.p50),
+        high_cents: round(d.p95),
+        inside: d.inside,
+      });
+    if (ctx.db.backtestSummary.customer_id.find(cid)) ctx.db.backtestSummary.customer_id.delete(cid);
+    ctx.db.backtestSummary.insert({
+      customer_id: cid,
+      cutoff: r.cutoff,
+      end: r.end,
+      paths: 2 * a.pairs,
+      coverage90: r.coverage90,
+      coverage90_raw: r.coverage90Raw,
+      end_error_pct: r.endErrorPct,
+      end_half_width_pct: r.endHalfWidthPct,
+      pinball: r.pinball,
+    });
+  }
+);
+
+/** Roll every customer's backtest into one headline row (overall_id = 0). */
+export const summarize_backtests = spacetimedb.reducer(ctx => {
+  const rows = [...ctx.db.backtestSummary.iter()];
+  if (!rows.length) throw new SenderError('No backtests yet; call run_backtest first');
+  const mean = (f: (r: (typeof rows)[number]) => number) => rows.reduce((s, r) => s + f(r), 0) / rows.length;
+  const median = (f: (r: (typeof rows)[number]) => number) => {
+    const xs = rows.map(f).sort((x, y) => x - y);
+    return xs[Math.floor(xs.length / 2)];
+  };
+  if (ctx.db.backtestOverall.overall_id.find(0)) ctx.db.backtestOverall.overall_id.delete(0);
+  ctx.db.backtestOverall.insert({
+    overall_id: 0,
+    customers: rows.length,
+    cutoff: rows[0].cutoff,
+    end: rows[0].end,
+    coverage90_mean: mean(r => r.coverage90),
+    coverage90_raw_mean: mean(r => r.coverage90_raw),
+    end_error_pct_median: median(r => r.end_error_pct),
+    end_half_width_pct_median: median(r => r.end_half_width_pct),
+    share_customers_coverage_80: mean(r => (r.coverage90 >= 0.8 ? 1 : 0)),
+  });
+});

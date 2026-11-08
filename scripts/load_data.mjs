@@ -6,6 +6,7 @@
 //   node scripts/load_data.mjs --server maincloud     # Maincloud
 //   node scripts/load_data.mjs --db spacetime360 --only C006,C002
 //   node scripts/load_data.mjs --forecast C006,C002,C055      # customers to run the 180-day forecast for
+//   node scripts/load_data.mjs --backtest none                # skip the May-Oct backtest (default: all)
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -21,6 +22,7 @@ const SERVER = arg('server', cfg.server ?? 'local');
 const DB = arg('db', cfg.database);
 const ONLY = arg('only', '') ? new Set(arg('only', '').split(',')) : null;
 const FORECAST = arg('forecast', 'C006,C002').split(',').filter(Boolean);
+const BACKTEST = arg('backtest', 'all'); // 'all', 'none', or a comma-separated list
 
 function csv(name) {
   const [head, ...lines] = readFileSync(join(ROOT, 'data', name), 'utf8').trim().split(/\r?\n/);
@@ -102,5 +104,14 @@ process.stdout.write('\n');
 for (const cid of FORECAST.filter(c => !ONLY || ONLY.has(c))) {
   call('run_forecast', cid, false);
   console.log(`  run_forecast: ${cid}`);
+}
+const btList = BACKTEST === 'none' ? [] : BACKTEST === 'all' ? customers.map(c => c.customer_id) : BACKTEST.split(',');
+btList.forEach((cid, i) => {
+  call('run_backtest', cid, '');
+  process.stdout.write(`\r  run_backtest: ${i + 1}/${btList.length}`);
+});
+if (btList.length) {
+  call('summarize_backtests');
+  process.stdout.write('\n');
 }
 process.stdout.write('Done. Check: spacetime sql ' + DB + ' "SELECT * FROM validation_issue" --server ' + SERVER + '\n');

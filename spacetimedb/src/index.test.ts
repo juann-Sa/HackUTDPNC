@@ -370,3 +370,29 @@ describe('AI narration: label binding and spelled-out amounts', () => {
     expect(auditReply('Your net worth is $13,557.', facts).problems).toEqual(['$13,557 missing label "net cash"']);
   });
 });
+
+describe('backtest reducers', () => {
+  const { test } = loadedHarness();
+  for (const cid of ['C006', 'C002', 'C055'])
+    test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: cid, cutoff: '' }));
+
+  it('forecasts May-Oct 2026 from April 30 and scores it day by day', () => {
+    const days = [...test.db.backtestDay.customer_id.filter('C006')].sort((a, b) => a.day_index - b.day_index);
+    expect(days.length).toBe(184);
+    expect(days[0].date).toBe('2026-05-01');
+    expect(days[days.length - 1].date).toBe('2026-10-31');
+    for (const d of days) expect(d.low_cents <= d.mid_cents && d.mid_cents <= d.high_cents).toBe(true);
+    const s = test.db.backtestSummary.customer_id.find('C006')!;
+    expect(s.cutoff).toBe('2026-04-30');
+    expect(s.coverage90).toBeCloseTo(days.filter(d => d.inside).length / days.length, 10);
+  });
+
+  it('summarizes across customers and validates input', () => {
+    test.withReducerTx(stranger, ctx => m.summarize_backtests(ctx, {}));
+    const o = test.db.backtestOverall.overall_id.find(0)!;
+    expect(o.customers).toBe(3);
+    expect(o.coverage90_mean).toBeGreaterThan(0.5);
+    expect(() => test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: 'C006', cutoff: '2024-12-01' }))).toThrow(/Cutoff/);
+    expect(() => test.withReducerTx(stranger, ctx => m.run_backtest(ctx, { customer_id: 'C999', cutoff: '' }))).toThrow(/Unknown customer/);
+  });
+});
