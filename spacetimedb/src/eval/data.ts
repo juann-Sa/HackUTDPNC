@@ -21,7 +21,7 @@ function cents(s: string): number {
 }
 
 /** Schedule plus monthly outflow (non-debt expenses + debt payments, the book's definition). */
-export function loadCustomer(cid: string): { schedule: Schedule; outflowCents: number } {
+export function loadCustomer(cid: string): { schedule: Schedule; outflowCents: number; incomeCents: number; debtPaymentsCents: number; context: string } {
   const tx = csv('transactions.csv').filter(r => r.customer_id === cid);
   const ac = csv('accounts.csv').filter(r => r.customer_id === cid);
   const prof = csv('profiles.csv').find(r => r.customer_id === cid);
@@ -35,6 +35,28 @@ export function loadCustomer(cid: string): { schedule: Schedule; outflowCents: n
     ac.map(r => ({ account_id: r.account_id, account_type: r.account_type, balance_cents: cents(r.balance), apr_pct: Number(r.apr_pct), annual_yield_pct: Number(r.annual_yield_pct), monthly_payment_cents: cents(r.monthly_payment) })),
     AS_OF, 180
   );
-  const outflowCents = cents(prof.monthly_non_debt_expenses) + ac.filter(r => DEBTS.has(r.account_type)).reduce((s, r) => s + cents(r.monthly_payment), 0);
-  return { schedule, outflowCents };
+  const debtPaymentsCents = ac.filter(r => DEBTS.has(r.account_type)).reduce((s, r) => s + cents(r.monthly_payment), 0);
+  const outflowCents = cents(prof.monthly_non_debt_expenses) + debtPaymentsCents;
+  return { schedule, outflowCents, incomeCents: cents(prof.monthly_income), debtPaymentsCents, context: dataContext(prof, ac, tx) };
+}
+
+const usd = (c: number) => `$${(c / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+/** What a Level 1 "just give the LLM the data" coach would see: profile, accounts, last 6 months of totals. */
+function dataContext(prof: Record<string, string>, ac: Record<string, string>[], tx: Record<string, string>[]): string {
+  const months = [...new Set(tx.map(r => r.posted_date.slice(0, 7)))].sort().slice(-6);
+  const lines = [
+    `Customer ${prof.customer_id}, data as of ${AS_OF}.`,
+    `Monthly income: ${usd(cents(prof.monthly_income))}. Monthly non-debt expenses: ${usd(cents(prof.monthly_non_debt_expenses))}. Credit limit: ${usd(cents(prof.credit_limit))}.`,
+    'Accounts:',
+    ...ac.map(r => `- ${r.account_type}: balance ${usd(cents(r.balance))}` + (DEBTS.has(r.account_type) ? `, APR ${r.apr_pct}%, monthly payment ${usd(cents(r.monthly_payment))}` : `, yield ${r.annual_yield_pct}%`)),
+    'Last 6 months (income / spending):',
+    ...months.map(m => {
+      const rs = tx.filter(r => r.posted_date.startsWith(m));
+      const inc = rs.filter(r => r.flow_class === 'income').reduce((s, r) => s + cents(r.amount), 0);
+      const sp = rs.filter(r => r.flow_class === 'expense').reduce((s, r) => s + cents(r.amount), 0);
+      return `- ${m}: ${usd(inc)} / ${usd(sp)}`;
+    }),
+  ];
+  return lines.join('\n');
 }

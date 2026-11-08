@@ -23,3 +23,23 @@ Every model explains identical engine facts (computed from the expected reading)
 compared like for like. Privacy: these are open-weight models served in Groq's cloud, so data leaves the machine;
 a local Ollama model would not (not run here). Only synthetic data is used. The offline scoring tests are in
 `spacetimedb/src/eval/model_compare.test.ts`.
+
+## Level 1 vs 2 vs 3 (starter kit implementation levels)
+
+Same what-if questions, same model, same customer at every level; ground truth is the forecast engine.
+
+| Level | What it is |
+|---|---|
+| 1 | One LLM call gets the raw data and answers (does its own math) |
+| 2 | Tool-using agent: the LLM picks approved tools (`get_accounts`, `calculate_health_metrics`, `simulate_scenario`) and answers from their results |
+| 3 | Orchestrated workflow (production): LLM reads the question → code validates → engine computes → LLM explains → number audit (+1 retry, else template) |
+| 3 + critic | Level 3 plus a supervisor LLM and a reviewer LLM |
+
+Measures per level: LLM calls, median seconds, input and output tokens, $ per question and per 1,000 questions, question read right, verdict agrees with the engine, answers whose numbers are all traceable, untraceable numbers per answer, template fallbacks. Ranks reliable-first, then cost, then time, and names the best level.
+
+```bash
+cd spacetimedb
+GROQ_API_KEY=... LEVELS_OUT=../analytics/levels/results.json npx vitest run src/levels.report.test.ts
+# optional: COMPARE_MODELS=openai/gpt-oss-120b  COMPARE_CUSTOMER=C006
+```
+Writes `analytics/levels/results.json` (every answer) and `results.md` (the tables and the verdict).

@@ -74,8 +74,13 @@ export const QUESTIONS: Question[] = [
   { q: "What's the weather tomorrow?", expected: { supported: false, checks: [{ name: 'not routed to a summary', ok: p => p.topic === undefined || p.topic === 'none' }] } },
 ];
 
-export interface ChatReply { text: string; ms: number; inTok: number; outTok: number; error: string }
-export type Chat = (model: string, messages: { role: string; content: string }[], json: boolean) => Promise<ChatReply>;
+export interface ToolCall { id: string; name: string; args: string }
+export interface ChatReply { text: string; ms: number; inTok: number; outTok: number; error: string; toolCalls?: ToolCall[] }
+/** OpenAI-style message; tool turns carry `tool_calls` (assistant) or `tool_call_id` (tool). */
+export type ChatMsg = { role: string; content: string; tool_calls?: unknown; tool_call_id?: string };
+/** OpenAI-style tool (function) definitions, for the tool-using agent (Level 2). */
+export type ToolDef = { type: 'function'; function: { name: string; description: string; parameters: Record<string, unknown> } };
+export type Chat = (model: string, messages: ChatMsg[], json: boolean, tools?: ToolDef[]) => Promise<ChatReply>;
 
 /** Valid JSON = the raw reply parses as a JSON object as-is (no extraction from surrounding prose). */
 export function scoreParse(raw: string, expected: Expected) {
@@ -200,11 +205,12 @@ export function groqChat(key: string, opts: { timeoutMs?: number; delayMs?: numb
   const timeoutMs = opts.timeoutMs ?? 60_000;
   const delayMs = opts.delayMs ?? 1_500;
   const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-  return async (model, messages, json) => {
+  return async (model, messages, json, tools) => {
     const body = JSON.stringify({
       model, temperature: 0.2, max_completion_tokens: 700, messages,
       ...(model.startsWith('openai/gpt-oss') ? { reasoning_effort: 'low' } : {}),
       ...(json ? { response_format: { type: 'json_object' } } : {}),
+      ...(tools?.length ? { tools, tool_choice: 'auto' } : {}),
     });
     for (let attempt = 0; ; attempt++) {
       await sleep(delayMs);
@@ -222,7 +228,11 @@ export function groqChat(key: string, opts: { timeoutMs?: number; delayMs?: numb
         }
         const j = (await res.json().catch(() => ({}))) as any;
         if (!res.ok) return { text: '', ms, inTok: 0, outTok: 0, error: `http ${res.status}: ${String(j?.error?.message ?? '').slice(0, 160)}` };
-        return { text: String(j.choices?.[0]?.message?.content ?? '').trim(), ms, inTok: j.usage?.prompt_tokens ?? 0, outTok: j.usage?.completion_tokens ?? 0, error: '' };
+        const msg = j.choices?.[0]?.message ?? {};
+        const toolCalls: ToolCall[] = Array.isArray(msg.tool_calls)
+          ? msg.tool_calls.map((c: any) => ({ id: String(c.id), name: String(c.function?.name ?? ''), args: String(c.function?.arguments ?? '{}') }))
+          : [];
+        return { text: String(msg.content ?? '').trim(), ms, inTok: j.usage?.prompt_tokens ?? 0, outTok: j.usage?.completion_tokens ?? 0, error: '', ...(toolCalls.length ? { toolCalls } : {}) };
       } catch (e) {
         return { text: '', ms: Date.now() - t0, inTok: 0, outTok: 0, error: String(e).slice(0, 160) };
       }
