@@ -1,7 +1,7 @@
 // End-to-end check of the module math against the independent Python reference
 // (analytics/reference/book_reference.py → reference.json), on all 100 customers.
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ConnectionId } from 'spacetimedb';
