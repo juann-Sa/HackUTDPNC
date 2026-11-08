@@ -31,7 +31,7 @@ describe('model comparison scoring', () => {
   it('end to end on C006 with a careful and a sloppy stub model', async () => {
     const { schedule, outflowCents } = loadCustomer('C006');
     expect(outflowCents).toBe(503_699); // matches book_snapshot.monthly_outflow_cents for C006
-    const expectedJson = new Map(QUESTIONS.map(q => [q.q, JSON.stringify(q.expected.scenario ?? { supported: false })]));
+    const expectedJson = new Map(QUESTIONS.map(q => [q.q, JSON.stringify(q.expected.ideal ?? q.expected.scenario ?? { supported: false })]));
     let sloppyAnswers = 0;
     const chat: Chat = async (model, messages, json) => {
       const user = messages.find(m => m.role === 'user')!.content;

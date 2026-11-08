@@ -37,6 +37,8 @@ export interface Expected {
   checks: { name: string; ok: (p: Record<string, unknown>) => boolean }[];
   /** The reading every model's answer step is evaluated on (raw JSON in PARSE_PROMPT's format). */
   scenario?: Record<string, unknown>;
+  /** A perfect parse reply when it differs from `scenario` (e.g. a routed question); used by the offline tests. */
+  ideal?: Record<string, unknown>;
 }
 export interface Question { q: string; expected: Expected }
 
@@ -60,7 +62,16 @@ export const QUESTIONS: Question[] = [
   { q: 'What if I use $3,000 of my savings to pay down my credit card?', expected: { supported: true,
     checks: [{ name: 'move_to_debt ≈ $3,000', ok: p => near(p.move_to_debt_cents, 300_000, 1) }, { name: 'not read as an expense', ok: p => !(num(p.one_off_cents) > 0) }],
     scenario: { supported: true, move_to_debt_cents: 300_000 } } },
-  { q: "What's the weather tomorrow?", expected: { supported: false, checks: [] } },
+  { q: 'If I buy a $30,000 car with $5,000 down, will I still have enough money for emergencies?', expected: { supported: true,
+    checks: [
+      { name: 'price ≈ $30,000', ok: p => near(p.purchase_price_cents, 3_000_000, 1) },
+      { name: 'down ≈ $5,000', ok: p => near(p.down_payment_cents, 500_000, 1) },
+      { name: 'read as a car loan, not a cash expense', ok: p => p.purchase_kind === 'car' && !(num(p.one_off_cents) > 0) },
+    ],
+    scenario: { supported: true, purchase_kind: 'car', purchase_price_cents: 3_000_000, down_payment_cents: 500_000, purchase_in_days: 30 } } },
+  { q: 'How am I doing financially overall?', expected: { supported: false,
+    checks: [{ name: 'routed to overview', ok: p => p.topic === 'overview' }], ideal: { supported: false, topic: 'overview' } } },
+  { q: "What's the weather tomorrow?", expected: { supported: false, checks: [{ name: 'not routed to a summary', ok: p => p.topic === undefined || p.topic === 'none' }] } },
 ];
 
 export interface ChatReply { text: string; ms: number; inTok: number; outTok: number; error: string }
@@ -76,7 +87,7 @@ export function scoreParse(raw: string, expected: Expected) {
   const parsed = parseScenario(raw); // what production does with it (tolerant extraction + clamping)
   const p = obj ?? (() => { try { const s = raw.indexOf('{'), e = raw.lastIndexOf('}'); return JSON.parse(raw.slice(s, e + 1)); } catch { return {}; } })();
   const supportedOk = parsed.supported === expected.supported;
-  const failed = expected.supported ? expected.checks.filter(c => !c.ok(p)).map(c => c.name) : [];
+  const failed = expected.checks.filter(c => !c.ok(p)).map(c => c.name);
   return { validJson: obj !== null, supportedOk, failedChecks: failed, correct: supportedOk && failed.length === 0 };
 }
 
