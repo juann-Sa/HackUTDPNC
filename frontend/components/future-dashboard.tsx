@@ -345,7 +345,7 @@ function ScenarioControlPanel({
           Reset to the coach&apos;s sliders
         </button>
       )}
-      <button className="future-apply-button" type="button" disabled={!changed || saving} onClick={onApply}>
+      <button className="future-apply-button" type="button" disabled={!changed || saving} onClick={() => onApply()}>
         {saving ? "Updating forecast…" : "Apply my slider changes"}
       </button>
       {error && <p className="future-control-error" role="alert">{error}</p>}

@@ -6,6 +6,32 @@ const CATEGORIES = ["housing", "utilities", "groceries", "other_spending", "dini
 type Category = (typeof CATEGORIES)[number];
 class InputError extends Error {}
 
+function spendingAdjustments(value: unknown): Record<Category, number> {
+  const adjustments = Object.fromEntries(CATEGORIES.map(category => [category, 1])) as Record<Category, number>;
+  if (value === undefined || value === null) return adjustments;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (!item || typeof item !== "object" || Array.isArray(item))
+        throw new InputError("Invalid spending adjustment entry");
+      const entry = item as Record<string, unknown>;
+      if (typeof entry.category !== "string" || !CATEGORIES.includes(entry.category as Category))
+        throw new InputError("Invalid spending category");
+      adjustments[entry.category as Category] = boundedNumber(entry.mult, 0, 3, `${entry.category} multiplier`);
+    }
+    return adjustments;
+  }
+
+  if (typeof value !== "object")
+    throw new InputError("Spending adjustments must be an object or category/multiplier list");
+  const raw = value as Record<string, unknown>;
+  for (const category of CATEGORIES) {
+    if (raw[category] !== undefined)
+      adjustments[category] = boundedNumber(raw[category], 0, 3, `${category} multiplier`);
+  }
+  return adjustments;
+}
+
 const boundedNumber = (value: unknown, min: number, max: number, name: string) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < min || parsed > max) throw new InputError(`Invalid ${name}`);
@@ -18,12 +44,10 @@ export async function POST(req: Request) {
     const customerId = typeof body.customer_id === "string" ? body.customer_id : "";
     if (!CUSTOMER_ID.test(customerId)) return Response.json({ error: "Bad customer id" }, { status: 400 });
 
-    const rawCategories = body.category_mults;
-    if (!rawCategories || typeof rawCategories !== "object" || Array.isArray(rawCategories))
-      throw new InputError("Invalid spending adjustments");
+    const categoryAdjustments = spendingAdjustments(body.category_mults);
     const categoryMults = CATEGORIES.map((category: Category) => ({
       category,
-      mult: boundedNumber((rawCategories as Record<string, unknown>)[category], 0, 3, `${category} multiplier`),
+      mult: categoryAdjustments[category],
     }));
     const purchaseKind = body.purchase_kind;
     if (purchaseKind !== "" && purchaseKind !== "car" && purchaseKind !== "home" && purchaseKind !== "other")
