@@ -278,3 +278,51 @@ describe('AI narration guardrail', () => {
     writeFileSync('/tmp/st360_narration.txt', text);
   }, 60_000);
 });
+
+describe('linked outside accounts', () => {
+  const { test } = loadedHarness();
+  const before = { ...test.db.bookSnapshot.customer_id.find('C006')! };
+  const carryBefore = { ...test.db.carrySummary.customer_id.find('C006')! };
+  const add = (over: Record<string, unknown> = {}) =>
+    test.withReducerTx(stranger, ctx =>
+      m.add_external_account(ctx, {
+        customer_id: 'C006', institution: 'Other Bank', account_type: 'savings', nickname: 'Rainy day',
+        balance_cents: 500_000, apr_pct: 0, annual_yield_pct: 4, monthly_payment_cents: 0, ...over,
+      } as any)
+    );
+
+  it('folds outside accounts into the book and carry', () => {
+    add();
+    add({ account_type: 'credit_card', nickname: 'Store card', balance_cents: 200_000, apr_pct: 26, annual_yield_pct: 0, monthly_payment_cents: 6_000 });
+    const ext = [...test.db.externalAccount.customer_id.filter('C006')].map(x => x.account_id).sort();
+    expect(ext).toEqual(['EXT-C006-1', 'EXT-C006-2']);
+    const s = test.db.bookSnapshot.customer_id.find('C006')!;
+    expect(s.liquid_cents).toBe(before.liquid_cents + 500_000);
+    expect(s.total_debt_cents).toBe(before.total_debt_cents + 200_000);
+    expect(s.monthly_debt_payments_cents).toBe(before.monthly_debt_payments_cents + 6_000);
+    expect(test.db.bookLine.account_id.find('EXT-C006-2')!.high_cost).toBe(true);
+    const c = test.db.carrySummary.customer_id.find('C006')!;
+    expect(Math.round(c.earn_cents - carryBefore.earn_cents)).toBe(20_000); // $5,000 at 4%
+    expect(Math.round(c.cost_cents - carryBefore.cost_cents)).toBe(52_000); // $2,000 at 26%
+    expect([...test.db.validationIssue.customer_id.filter('C006')]).toEqual([]);
+  });
+
+  it('includes them in the forecast and keeps the timeline continuous at today', () => {
+    test.withReducerTx(stranger, ctx => m.run_forecast(ctx, { customer_id: 'C006', include_external: false }));
+    const today = [...test.db.timeline360.customer_id.filter('C006')].find(r => r.day_offset === 0)!;
+    expect(today.continue_mid_cents).toBe(today.actual_net_cash_cents);
+    expect(today.coach_mid_cents).toBe(today.actual_net_cash_cents);
+    const move = test.db.coachAction.action_id.find('C006|move_cash_to_debt');
+    expect(move).toBeDefined();
+  }, 60_000);
+
+  it('rejects bad input and removes cleanly', () => {
+    expect(() => add({ account_type: 'crypto' })).toThrow(/Unsupported account type/);
+    expect(() => add({ balance_cents: -5 })).toThrow(/non-negative/);
+    expect(() => add({ customer_id: 'C999' })).toThrow(/Unknown customer/);
+    test.withReducerTx(stranger, ctx => m.remove_external_account(ctx, { account_id: 'EXT-C006-1' }));
+    test.withReducerTx(stranger, ctx => m.remove_external_account(ctx, { account_id: 'EXT-C006-2' }));
+    expect(test.db.bookSnapshot.customer_id.find('C006')!.liquid_cents).toBe(before.liquid_cents);
+    expect(test.db.bookLine.account_id.find('EXT-C006-2')).toBeFalsy();
+  });
+});

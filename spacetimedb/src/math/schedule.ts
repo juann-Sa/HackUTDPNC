@@ -76,7 +76,17 @@ const variance = (xs: number[]) => {
 };
 const counterpart = (transferId: string) => transferId.split('-')[2] ?? '';
 
-export function buildSchedule(ledger: LedgerRow[], accounts: AccountRow[], asOf: string, horizonDays: number): Schedule {
+/**
+ * @param external accounts at other banks (no ledger here): their cash counts as liquid, their debts as
+ *        scheduled payments on the 15th, their CDs/IRAs as locked savings with no new contributions.
+ */
+export function buildSchedule(
+  ledger: LedgerRow[],
+  accounts: AccountRow[],
+  asOf: string,
+  horizonDays: number,
+  external: AccountRow[] = []
+): Schedule {
   const allMonths = [...new Set(ledger.map(t => ym(t.posted_date)))].sort();
   const flowMonths = new Set(allMonths.slice(-FLOW_MONTHS));
   const nFlow = Math.max(flowMonths.size, 1);
@@ -260,7 +270,13 @@ export function buildSchedule(ledger: LedgerRow[], accounts: AccountRow[], asOf:
   }
 
   const savings = acct('savings')[0];
-  const startLiquid = accounts.filter(a => liquidTypes.has(a.account_type)).reduce((s, a) => s + a.balance_cents, 0);
+  for (const x of external) {
+    if (['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(x.account_type))
+      loans.push({ accountId: x.account_id, type: x.account_type, balance: x.balance_cents, aprPct: x.apr_pct, payment: x.monthly_payment_cents, day: 15, feePerMonth: 0 });
+    else if (x.account_type === 'cd' || x.account_type === 'ira')
+      locked.push({ accountId: x.account_id, type: x.account_type, balance: x.balance_cents, yieldPct: x.annual_yield_pct, contribution: 0, day: 5 });
+  }
+  const startLiquid = [...accounts, ...external].filter(a => liquidTypes.has(a.account_type)).reduce((s, a) => s + a.balance_cents, 0);
   return {
     asOf,
     startLiquid,

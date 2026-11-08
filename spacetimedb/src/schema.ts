@@ -70,6 +70,27 @@ export const statement = table(
   }
 );
 
+/**
+ * Accounts at other banks the customer links by hand ("connect to other banks").
+ * Kept apart from `account` because they have no ledger here; they join the book snapshot,
+ * carry and forecast, but not the ledger reconciliation.
+ */
+export const externalAccount = table(
+  { name: 'external_account', public: true },
+  {
+    account_id: t.string().primaryKey(), // EXT-<customer_id>-<n>
+    customer_id: t.string().index('btree'),
+    institution: t.string(),
+    nickname: t.string(),
+    account_type: t.string(), // checking | savings | cd | ira | credit_card | auto_loan | personal_loan | mortgage
+    balance_cents: t.f64(),
+    apr_pct: t.f64(),
+    annual_yield_pct: t.f64(),
+    monthly_payment_cents: t.f64(),
+    added_at: t.timestamp(),
+  }
+);
+
 // ---------- results (written by recompute reducers; clients subscribe) ----------
 export const bookSnapshot = table(
   { name: 'book_snapshot', public: true },
@@ -357,6 +378,7 @@ const spacetimedb = schema({
   account,
   ledgerEntry,
   statement,
+  externalAccount,
   bookSnapshot,
   bookLine,
   carrySummary,
