@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 // Every table the dashboard reads for one customer, fetched in parallel.
 const TABLES = [
   "customer", "account", "external_account", "book_snapshot", "ledger_entry", "statement",
-  "pnl_month", "debt_payoff", "debt_plan", "danger_day", "goal", "goal_result",
+  "pnl_month", "debt_payoff", "debt_plan", "danger_day", "goal", "goal_result", "qa",
 ] as const;
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {

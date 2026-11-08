@@ -102,3 +102,33 @@
 .bill-risk { color: #b45309; }
 .payments-note { margin: 8px 25px 10px; color: #737373; font-size: 12px; }
 .payments-panel .bill-date .bill-risk { white-space: normal; }
+
+/* ask the coach */
+.coach-panel { margin-top: 24px; padding-bottom: 22px; }
+.coach-panel .panel-heading { padding-bottom: 16px; }
+.coach-panel h2 { display: flex; align-items: center; gap: 8px; font-size: 20px; font-weight: 500; letter-spacing: -.55px; }
+.coach-sub { margin: 6px 0 0; color: #737373; font-size: 13px; }
+.coach-form { display: flex; gap: 10px; margin: 0 25px; }
+.coach-form input { flex: 1; min-width: 0; font: inherit; font-size: 15px; padding: 12px 14px; border: 1px solid #e0e0e0; border-radius: 10px; background: #fff; }
+.coach-form input:focus { outline: 2px solid #f58025; outline-offset: 1px; }
+.coach-form button { font: inherit; font-weight: 500; padding: 0 20px; border: 0; border-radius: 10px; background: #f58025; color: #fff; cursor: pointer; }
+.coach-form button:disabled { opacity: .55; cursor: default; }
+.coach-examples { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 25px 0; }
+.coach-examples button { font: inherit; font-size: 12px; padding: 6px 10px; border: 1px solid #ececec; border-radius: 999px; background: #fafafa; color: #404040; cursor: pointer; }
+.coach-examples button:hover:not(:disabled) { border-color: #f5b98a; background: #fff7f0; }
+.coach-status, .coach-error { margin: 16px 25px 0; font-size: 13px; color: #737373; }
+.coach-error { color: #9b1c1c; }
+.coach-answer { margin: 16px 25px 0; padding: 16px 18px; border: 1px solid #eee; border-radius: 12px; background: #fcfcfc; }
+.coach-answer-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 15px; }
+.coach-read { margin: 8px 0 0; font-size: 12px; color: #737373; }
+.coach-text { margin: 10px 0; font-size: 15px; line-height: 1.55; color: #262626; white-space: pre-wrap; }
+.coach-answer small { color: #8a8a8a; font-size: 11px; }
+.coach-verdict { display: inline-block; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .4px; }
+.coach-verdict[data-verdict="comfortable"] { background: #e8f8ee; color: #15803d; }
+.coach-verdict[data-verdict="tight"] { background: #fff4e0; color: #b45309; }
+.coach-verdict[data-verdict="risky"] { background: #fdecec; color: #b91c1c; }
+.coach-history { margin: 18px 25px 0; border-top: 1px solid #f1f1f1; padding-top: 12px; }
+.coach-history h3 { margin: 0 0 6px; font-size: 13px; font-weight: 500; color: #737373; }
+.coach-history summary { cursor: pointer; padding: 6px 0; font-size: 14px; display: flex; gap: 8px; align-items: center; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+@media (max-width: 640px) { .coach-form { flex-direction: column; } .coach-form button { padding: 12px; } }

@@ -13,6 +13,7 @@ export interface SnapshotRow { as_of: string; net_worth_cents: number; liquid_ce
 export interface PayoffRow { account_id: string; account_type: string; apr_pct: number; payoff_months: number | null; payoff_month: string | null; coach_payoff_months: number | null; coach_payoff_month: string | null }
 export interface PlanRow { consumer_free_month: string | null; coach_consumer_free_month: string | null; interest_saved_cents: number }
 export interface DangerRow { date: string; p_below: number; reasons: string }
+export interface QaRow { qa_id: number | string; question: string; interpretation: string; supported: boolean; verdict: string; answer: string; source: string }
 export interface CustomerRow { customer_id: string; credit_limit_cents: number }
 
 export interface CustomerData {
@@ -26,6 +27,7 @@ export interface CustomerData {
   debt_payoff: PayoffRow[];
   debt_plan: PlanRow[];
   danger_day: DangerRow[];
+  qa?: QaRow[];
 }
 
 const BUFFER_MONTHS = 3; // same cushion the backend coach keeps
