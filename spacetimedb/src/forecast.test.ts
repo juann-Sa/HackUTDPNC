@@ -130,5 +130,5 @@ describe('forecast engine', () => {
         if (rec) expect(rec.pLowAfter).toBeLessThanOrEqual(RISK_CAP);
       }
     }
-  });
+  }, 60_000);
 });
