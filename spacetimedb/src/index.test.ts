@@ -172,6 +172,85 @@ describe('SpaceTime 360 book math', () => {
     }
   });
 
+  it('emits six months of history and six deterministic monthly projections', () => {
+    test.withReducerTx(owner, ctx => m.generate_180_day_projection(ctx, { customer_id: 'C001' }));
+    const rows = [...test.db.financialProjection.customer_id.filter('C001')];
+    const historical = rows.filter(row => row.record_type === 'historical').sort((a, b) => a.month.localeCompare(b.month));
+    const projected = rows.filter(row => row.record_type === 'projected').sort((a, b) => a.month.localeCompare(b.month));
+
+    expect(historical).toHaveLength(6);
+    expect(historical.map(row => row.month)).toEqual([
+      '2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10',
+    ]);
+    for (const row of historical) {
+      const monthStatements = [...test.db.statement.customer_id.filter('C001')]
+        .filter(statement => statement.month === row.month);
+      expect(row.liquid_balance_cents).toBe(
+        monthStatements
+          .filter(statement => ['checking', 'savings'].includes(statement.account_type))
+          .reduce((total, statement) => total + statement.closing_cents, 0)
+      );
+      expect(row.debt_balance_cents).toBe(
+        monthStatements
+          .filter(statement => ['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(statement.account_type))
+          .reduce((total, statement) => total + statement.closing_cents, 0)
+      );
+    }
+    expect(projected.map(row => row.month)).toEqual([
+      '2026-11', '2026-12', '2027-01', '2027-02', '2027-03', '2027-04',
+    ]);
+    const profile = test.db.customer.customer_id.find('C001')!;
+    const accounts = [...test.db.account.customer_id.filter('C001')];
+    const currentLiquidCash = accounts
+      .filter(account => ['checking', 'savings'].includes(account.account_type))
+      .reduce((total, account) => total + account.balance_cents, 0);
+    const debtAccounts = accounts.filter(account =>
+      ['credit_card', 'auto_loan', 'personal_loan', 'mortgage'].includes(account.account_type)
+    );
+    const currentTotalDebt = debtAccounts.reduce((total, account) => total + account.balance_cents, 0);
+    const minimumMonthlyPayments = debtAccounts.reduce((total, account) => total + account.monthly_payment_cents, 0);
+    const november = projected[0];
+    const december = projected[1];
+    expect(november.current_liquid_cash_cents).toBe(currentLiquidCash);
+    expect(november.current_total_debt_cents).toBe(currentTotalDebt);
+    expect(november.total_minimum_monthly_payments_cents).toBe(minimumMonthlyPayments);
+    expect(november.holiday_expense_spike).toBe(true);
+    expect(november.monthly_expenses_cents).toBe(Math.round(profile.monthly_non_debt_expenses_cents * 1.25));
+    expect(november.monthly_debt_payments_cents).toBe(Math.min(minimumMonthlyPayments, currentTotalDebt));
+    expect(november.liquid_balance_cents).toBe(
+      currentLiquidCash + profile.monthly_income_cents - november.monthly_expenses_cents! - november.monthly_debt_payments_cents!
+    );
+    expect(november.debt_balance_cents).toBe(currentTotalDebt - november.monthly_debt_payments_cents!);
+    expect(december.holiday_expense_spike).toBe(false);
+    expect(december.monthly_expenses_cents).toBe(profile.monthly_non_debt_expenses_cents);
+    expect(projected.every(row => row.monthly_income_cents === profile.monthly_income_cents)).toBe(true);
+  });
+
+  it('only lets the owner upsert external accounts for existing customers', () => {
+    const externalAccount = {
+      account_id: 'plaid_test_account',
+      customer_id: 'C001',
+      account_type: 'checking',
+      balance_cents: 12345,
+      opening_balance_cents: 12345,
+      monthly_payment_cents: 0,
+      apr_pct: 0,
+      annual_yield_pct: 0,
+    };
+
+    test.withReducerTx(owner, ctx => m.add_external_account(ctx, { rows: [externalAccount] }));
+    expect(test.db.account.account_id.find(externalAccount.account_id)?.balance_cents).toBe(12345);
+
+    expect(() =>
+      test.withReducerTx(stranger, ctx => m.add_external_account(ctx, { rows: [externalAccount] }))
+    ).toThrow(/owner/);
+    expect(() =>
+      test.withReducerTx(owner, ctx =>
+        m.add_external_account(ctx, { rows: [{ ...externalAccount, customer_id: 'missing-customer' }] })
+      )
+    ).toThrow(/Unknown customer/);
+  });
+
   it('only the owner can load data', () => {
     expect(() =>
       test.withReducerTx(stranger, ctx => m.reset_data(ctx, {}))

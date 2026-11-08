@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "api:dev": "tsx watch api/server.ts",
+    "api:start": "tsx api/server.ts",
+    "api:typecheck": "tsc -p tsconfig.api.json",
     "build": "tsc -b && vite build",
     "format": "prettier . --write --ignore-path ../../.prettierignore",
     "lint": "eslint . && prettier . --check --ignore-path ../../.prettierignore",
@@ -12,19 +15,25 @@
     "test": "vitest run",
     "generate": "cargo run -p gen-bindings -- --out-dir src/module_bindings --module-path spacetimedb && prettier --write src/module_bindings",
     "spacetime:generate": "spacetime generate --lang typescript --out-dir src/module_bindings --module-path spacetimedb",
+    "spacetime:generate:api": "spacetime generate --lang typescript --out-dir api/spacetime_bindings --module-path spacetimedb --yes",
     "spacetime:publish:local": "spacetime publish --module-path server --server local",
     "spacetime:publish": "spacetime publish --module-path server --server maincloud"
   },
   "dependencies": {
-    "spacetimedb": "2.14.*",
+    "dotenv": "^18.0.9",
+    "express": "^5.3.0",
+    "plaid": "^51.0.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "spacetimedb": "2.14.*",
+    "tsx": "^4.23.15"
   },
   "devDependencies": {
     "@eslint/js": "^9.17.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
     "@testing-library/user-event": "^14.6.1",
+    "@types/express": "^5.0.6",
     "@types/react": "^18.3.18",
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^5.0.2",

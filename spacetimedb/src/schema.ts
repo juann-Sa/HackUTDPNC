@@ -70,6 +70,25 @@ export const statement = table(
   }
 );
 
+export const financialProjection = table(
+  { name: 'financial_projection', public: true },
+  {
+    projection_id: t.string().primaryKey(), // customer_id|record_type|YYYY-MM
+    customer_id: t.string().index('btree'),
+    month: t.string(),
+    record_type: t.string(), // historical | projected
+    current_liquid_cash_cents: t.f64(),
+    current_total_debt_cents: t.f64(),
+    total_minimum_monthly_payments_cents: t.f64(),
+    liquid_balance_cents: t.f64(),
+    debt_balance_cents: t.f64(),
+    monthly_income_cents: t.option(t.f64()),
+    monthly_expenses_cents: t.option(t.f64()),
+    monthly_debt_payments_cents: t.option(t.f64()),
+    holiday_expense_spike: t.bool(),
+  }
+);
+
 // ---------- results (written by recompute reducers; clients subscribe) ----------
 export const bookSnapshot = table(
   { name: 'book_snapshot', public: true },
@@ -196,6 +215,7 @@ const spacetimedb = schema({
   account,
   ledgerEntry,
   statement,
+  financialProjection,
   bookSnapshot,
   bookLine,
   carrySummary,
