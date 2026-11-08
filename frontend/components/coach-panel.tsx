@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import "./coach-panel.css";
 import { useRouter } from "next/navigation";
 import { useLiveData } from "./live-data-provider";
-import type { QaRow } from "@/lib/live-data";
+import type { CoachScenario, QaRow, ScenarioForecastPoint } from "@/lib/live-data";
 
 const EXAMPLES = [
   "If I buy a $30,000 car with $5,000 down, will I still have enough for emergencies?",
@@ -17,8 +17,9 @@ export const DISCLAIMER = "Educational tool using synthetic data — not financi
 const VERDICT: Record<string, string> = { comfortable: "Comfortable", tight: "Tight", risky: "Risky" };
 
 interface Answer { question: string; answer: string; verdict: string; interpretation: string; supported: boolean; source: string }
+interface AskResponse extends Omit<Answer, "question"> { error?: string; scenario?: CoachScenario | null; forecast?: ScenarioForecastPoint[] }
 
-export default function CoachPanel({ navigateOnAsk = false, initialQuestion = "" }: { navigateOnAsk?: boolean; initialQuestion?: string }) {
+export default function CoachPanel({ navigateOnAsk = false, initialQuestion = "", suggestions = EXAMPLES, onScenario }: { navigateOnAsk?: boolean; initialQuestion?: string; suggestions?: string[]; onScenario?: (scenario: CoachScenario, forecast: ScenarioForecastPoint[]) => void }) {
   const router = useRouter();
   const autoAsked = useRef(false);
   const { customerId, data, reload, loading } = useLiveData();
@@ -34,9 +35,10 @@ export default function CoachPanel({ navigateOnAsk = false, initialQuestion = ""
     setBusy(true); setError(null); setQuestion(text);
     try {
       const r = await fetch("/api/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ customer_id: customerId, question: text }) });
-      const body = await r.json();
+      const body = await r.json() as AskResponse;
       if (!r.ok) throw new Error(body.error ?? `HTTP ${r.status}`);
       setCurrent({ question: text, ...body });
+      if (body.scenario && body.forecast?.length) onScenario?.(body.scenario, body.forecast);
       reload();
     } catch (e) { setError((e as Error).message); } finally { setBusy(false); }
   }
@@ -59,7 +61,7 @@ export default function CoachPanel({ navigateOnAsk = false, initialQuestion = ""
       <input id="coach-question" value={question} maxLength={300} placeholder="e.g. Can I afford a $1,500 laptop in December?" onChange={event => setQuestion(event.target.value)} disabled={busy} />
       <button type="submit" disabled={busy || !question.trim()}>{busy ? "Thinking…" : "Ask"}</button>
     </form>
-    <div className="coach-examples" aria-label="Example questions">{EXAMPLES.map(q => <button key={q} type="button" disabled={busy} onClick={() => void ask(q)}>{q}</button>)}</div>
+    <div className="coach-examples" aria-label="Example questions">{suggestions.map(q => <button key={q} type="button" disabled={busy} onClick={() => void ask(q)}>{q}</button>)}</div>
     <div aria-live="polite">
       {busy && <p className="coach-status">Running the simulations and checking the answer… this can take a few seconds.</p>}
       {error && <p className="coach-error" role="alert">{error}</p>}

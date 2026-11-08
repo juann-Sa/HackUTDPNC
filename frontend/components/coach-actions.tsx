@@ -15,17 +15,22 @@ const TITLES: Record<string, (a: CoachActionRow) => string> = {
 const ORDER = ["move_cash_to_debt", "close_monthly_gap", "trim_category", "trim_discretionary", "reserve_for_surprises", "protect_income"];
 
 /** The coach's recommended actions for this customer (coach_action table), with what each one changes. */
-export default function CoachActions() {
-  const { data } = useLiveData();
+export default function CoachActions({ title = "Recommendation", maxItems }: { title?: string; maxItems?: number }) {
+  const { data, error, loading } = useLiveData();
   const actions = (data?.coach_action ?? []).slice().sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind));
+  const visibleActions = maxItems == null ? actions : actions.slice(0, maxItems);
   return (
     <section className="panel coach-actions" aria-labelledby="actions-title">
-      <div className="panel-heading"><div><h2 id="actions-title">Recommendation</h2></div></div>
-      {!data ? <p className="actions-empty">Loading…</p> : actions.length === 0 ? (
+      <div className="panel-heading"><div><h2 id="actions-title">{title}</h2></div></div>
+      {loading ? <p className="actions-empty" role="status">Loading…</p> : error ? (
+        <p className="actions-empty" role="alert">Recommendations are unavailable right now.</p>
+      ) : !data ? (
+        <p className="actions-empty">No recommendation data is available.</p>
+      ) : actions.length === 0 ? (
         <p className="actions-empty">No recommendations yet. Run <code>run_forecast</code> for this customer.</p>
       ) : (
         <ol className="action-list">
-          {actions.map(a => {
+          {visibleActions.map(a => {
             const riskChanged = Math.abs(a.p_low_after - a.p_low_before) >= 0.0005;
             const esChanged = Math.abs(a.es_after_cents - a.es_before_cents) >= 100;
             return (
