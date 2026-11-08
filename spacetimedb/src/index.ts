@@ -17,7 +17,7 @@ import { seedFromString } from './math/rng';
 import { type Fact, SYSTEM_PROMPT, auditReply, pct, templateText, usd, userPrompt } from './math/narrate';
 import { backtestCustomer } from './math/backtest';
 import { GOAL_KINDS, MAX_GOAL_DAYS, evaluateGoal } from './math/goals';
-import { ANSWER_ASK, PARSE_PROMPT, evaluateQuestion, parseScenario } from './math/ask';
+import { ANSWER_ASK, ANSWER_TOPIC, PARSE_PROMPT, TOPIC_LABELS, evaluateQuestion, parseScenario } from './math/ask';
 import { addMonths, debtsFromSchedule, simulatePayoff } from './math/payoff';
 
 export default spacetimedb;
@@ -906,8 +906,20 @@ export const ask = spacetimedb.procedure(
       { role: 'user', content: q },
     ], true);
     const p = parseScenario(parsed.text);
+    // 1b) router: a question about where they stand (not a what-if) goes to the matching summary's facts
+    if (!parsed.error && !p.supported && p.topic !== 'none') {
+      let facts: Fact[];
+      try {
+        facts = ctx.withTx(tx => gatherFacts(tx, cid));
+      } catch {
+        return `No forecast for ${cid} yet. Run run_forecast first.`;
+      }
+      const r = explainWithAudit(ctx, facts, ANSWER_TOPIC(q), templateText(p.topic, facts));
+      record({ interpretation: `A question about ${TOPIC_LABELS[p.topic]}`, supported: true, verdict: '', answer: r.text, source: r.source, rejected: r.rejected });
+      return r.text;
+    }
     if (parsed.error || !p.supported) {
-      const msg = 'I can answer "what if" questions about your income, spending, a one-time expense, paying down debt with cash, or losing your job. Try asking it that way.';
+      const msg = 'I can answer questions about your accounts, where your money is headed, debt payoff and risk, and "what if" questions about income, spending, a purchase or loan, paying down debt, or losing your job. That one is outside what I can check.';
       record({ interpretation: p.summary, supported: false, verdict: '', answer: msg, source: 'template', rejected: parsed.error });
       return msg;
     }

@@ -7,7 +7,7 @@ import { buildSchedule, type LedgerRow, type AccountRow } from './math/schedule'
 import { DEFAULT_ASSUMPTIONS, amortizedPayment, makeTapes, runForecast } from './math/forecast';
 import { analyze, RISK_CAP } from './math/coach';
 import { Draws, Tape, invNorm, seedFromString } from './math/rng';
-import { evaluateQuestion, parseScenario, verdict } from './math/ask';
+import { PARSE_PROMPT, ROUTE_TOPICS, evaluateQuestion, parseScenario, verdict } from './math/ask';
 import { auditReply } from './math/narrate';
 import { addMonths, simulatePayoff } from './math/payoff';
 
@@ -231,5 +231,18 @@ describe('financed purchase (car loan)', () => {
     expect(verdict(0.01, 900_000, 300_000, 2.5)).toBe('tight');
     expect(verdict(0.01, 900_000, 300_000, 0.5)).toBe('risky');
     expect(verdict(0.01, 900_000, 300_000, 4)).toBe('comfortable');
+  });
+});
+
+describe('question router', () => {
+  it('sends non-what-if questions to a summary topic and rejects unknown topics', () => {
+    expect(parseScenario('{"supported": false, "topic": "coach"}').topic).toBe('coach');
+    expect(parseScenario('{"supported": false, "topic": "risk"}').topic).toBe('risk');
+    expect(parseScenario('{"supported": false, "topic": "weather"}').topic).toBe('none');
+    expect(parseScenario('{"supported": false}').topic).toBe('none');
+    expect(parseScenario('garbage').topic).toBe('none');
+  });
+  it('the prompt lists every routable topic', () => {
+    for (const t of ROUTE_TOPICS) expect(PARSE_PROMPT).toContain(`"${t}"`);
   });
 });

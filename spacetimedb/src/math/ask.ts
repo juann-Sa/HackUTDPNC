@@ -25,7 +25,20 @@ export const PARSE_PROMPT = [
   '"loan_term_months": loan length in months if given, else null; "purchase_in_days": days from today until the purchase, 0-179, default 30.',
   'If the customer buys something outright with cash, use one_off_cents instead.',
   '"summary": a short restatement of the scenario in plain words.',
+  'If the question is NOT a what-if (supported false), set "topic" to the summary that answers it best:',
+  '"overview" (overall financial health, net worth, how am I doing), "past" (what happened to my money, where it went),',
+  '"future" (where am I headed, what will my balance be), "coach" (what should I do, paying off debt, when will I be debt-free, saving interest),',
+  '"risk" (how safe am I, emergencies, worst case, could I run out of money), "goals" (my savings goals),',
+  'or "none" if it is not about their own finances. Default "none".',
 ].join(' ');
+
+/** Summaries the router can send a non-what-if question to (same topics as the narrate procedure). */
+export const ROUTE_TOPICS = ['overview', 'past', 'future', 'coach', 'risk', 'goals'] as const;
+export type RouteTopic = (typeof ROUTE_TOPICS)[number];
+export const TOPIC_LABELS: Record<RouteTopic, string> = {
+  overview: 'your overall financial health', past: 'what happened to your money', future: 'where your money is headed',
+  coach: 'what to do next and paying off debt', risk: 'how well you could handle a shock', goals: 'your savings goals',
+};
 
 export interface ParsedScenario {
   supported: boolean;
@@ -38,6 +51,8 @@ export interface ParsedScenario {
   /** financed purchase; undefined when the question has none */
   purchase?: { kind: 'car' | 'home' | 'other'; priceCents: number; downCents: number; aprPct: number; termMonths: number; inDays: number; aprGiven: boolean; termGiven: boolean };
   summary: string;
+  /** for non-what-if questions: which summary answers it ('none' = off-topic) */
+  topic: RouteTopic | 'none';
 }
 
 /** Defaults when the customer doesn't say (in line with the starter data's loans: auto 7.5%, mortgage 6.5%). */
@@ -75,6 +90,7 @@ export function parseScenario(raw: string): ParsedScenario {
     jobLossMonths: Math.round(clamp(j.job_loss_months, 0, 6, 0)),
     purchase: parsePurchase(j),
     summary: typeof j.summary === 'string' ? j.summary.slice(0, 200) : '',
+    topic: (ROUTE_TOPICS as readonly string[]).includes(j.topic as string) ? (j.topic as RouteTopic) : 'none',
   };
 }
 
@@ -110,6 +126,9 @@ export function verdict(pLow: number, endMedianCents: number, monthlyOutflowCent
 /** Emergency-fund guideline used for purchase questions: cash covering this many months of bills
  *  (same 3-month cushion the coach keeps). With a purchase, the verdict is at best "tight" below it. */
 export const EMERGENCY_MONTHS = 3;
+
+export const ANSWER_TOPIC = (q: string) =>
+  `Answer the customer's question in two to four sentences using only the facts that bear on it; if the facts do not answer it, say what you can and what is not known. The question was: "${q}"`;
 
 export const ANSWER_ASK =
   'Answer the customer\'s question using only these facts. Start with the verdict in plain words, then the two or three numbers that matter most, then one practical tip.';
